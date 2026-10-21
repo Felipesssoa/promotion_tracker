@@ -1,4 +1,5 @@
 
+import logging
 import socket
 import subprocess
 import time
@@ -14,8 +15,11 @@ from playwright.sync_api import (
     sync_playwright,
 )
 
-from ..core.paths import PROJECT_PATHS
+from ..common.paths import PROJECT_PATHS
 from .story_collector import StoryCollector
+
+
+logger = logging.getLogger(__name__)
 
 
 class InstagramClient:
@@ -284,9 +288,9 @@ class InstagramClient:
 
         process = subprocess.Popen(args)
 
-        print(
-            "\nFaça login no Instagram na janela aberta"
-            "\nDepois, feche o navegador para continuar"
+        logger.info(
+            "Faça login no Instagram na janela aberta e feche o navegador "
+            "para continuar."
         )
 
         # Aguarda o processo iniciado pelo comando terminar
@@ -367,10 +371,10 @@ class InstagramClient:
         self._start_edge()
 
         if self._is_logged_in():
-            print("Sessão do Instagram encontrada")
+            logger.info("Sessão do Instagram encontrada.")
             return self.page
 
-        print("Sessão não autenticada. Faça login para continuar")
+        logger.info("Sessão não autenticada. Será necessário fazer login.")
 
         self._stop_edge()
         self._open_manual_login()
@@ -389,7 +393,7 @@ class InstagramClient:
                 "Não foi possível confirmar o login no Instagram"
             )
 
-        print("Login confirmado")
+        logger.info("Login confirmado.")
         return self.page
 
     def close(self) -> None:

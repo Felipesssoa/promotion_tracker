@@ -1,0 +1,13 @@
+# Produtos/famílias monitorados pelo pipeline.
+produtos:
+  - produto: "Pasteurizado"
+  - produto: "Longa Vida"
+  - produto: "Iogurte"
+  - produto: "Queijo"
+  - produto: "Requeijão"
+  - produto: "Manteiga"
+  - produto: "Doce de Leite"
+  - produto: "Coalhada"
+  - produto: "Ricota"
+  - produto: "Bebida Láctea"
+  - produto: "Creme de Ricota"

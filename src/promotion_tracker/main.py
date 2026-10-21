@@ -1,50 +1,63 @@
-from extraction.llm_extractor import LLMExtractor
-from ingestion.instagram_client import InstagramClient
-from consolidation.consolidator import Consolidator
+import logging
+import sys
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+
+def _ensure_src_on_path() -> None:
+    source_root = str(Path(__file__).resolve().parents[1])
+    if source_root not in sys.path:
+        sys.path.insert(0, source_root)
+
+
 def main():
+    _ensure_src_on_path()
+
+    from promotion_tracker.common.logging_config import configure_logging
+
+    configure_logging()
+
+    from promotion_tracker.consolidation.consolidator import Consolidator
+    from promotion_tracker.ingestion.instagram_client import InstagramClient
+    from promotion_tracker.normalization.normalizer import Normalizer
+
     instagram = InstagramClient()
 
     try:
         # ---------------------------------------------------------
         # ETAPA 1: Coleta de Dados Brutos (Playwright)
         # ---------------------------------------------------------
-        #page = instagram.connect()
-        print("\n--- 1. Iniciando coleta de Stories ---")
-        #stories = instagram.get_stories()
-        print("--- Coleta finalizada ---\n")
+        logger.info("Etapa 1/5: coleta de Stories não executada nesta versão.")
 
         # ---------------------------------------------------------
         # ETAPA 2: Melhoria de Imagem (ESPCN 4x + Lanczos 2x)
         # ---------------------------------------------------------
-        print("--- 2. Iniciando melhoria de imagens (Enhancer) ---")
-        #try:
-        #    enhancer = OCRImageEnhancer()
-        #    enhancer.process_bronze_folder()
-        #except Exception as e:
-        #    print(f"\n[ERRO] Falha no Enhancer: {e}")
-#
+        logger.info("Etapa 2/5: melhoria de imagens não executada nesta versão.")
+
         # ---------------------------------------------------------
         # ETAPA 3: Extração via IA de Visão (Ollama)
         # ---------------------------------------------------------
-        #print("\n--- 3. Iniciando Extração de Dados (Ollama VLM) ---")
-        #try:
-        #    # Você pode mudar o modelo aqui se preferir outro (ex: "llama3.2-vision")
-        #    extractor = LLMExtractor(model_name="qwen2.5vl:latest")
-        #    extractor.process_bronze_folder()
-        #except Exception as e:
-        #    print(f"\n[ERRO] Falha na extração com Ollama. O Ollama está rodando? Erro: {e}")
-#
-        #input("\nPressione ENTER para fechar o navegador e encerrar o programa...")
-#
+        logger.info("Etapa 3/5: extração via IA não executada nesta versão.")
+
         # ---------------------------------------------------------
-        # ETAPA 4: Consolidação de Dados (Silver -> Gold)
+        # ETAPA 4: Normalização dos dados (Silver -> Silver reviewed)
         # ---------------------------------------------------------
-        print("\n--- 4. Iniciando Consolidação de Dados (Silver -> Gold) ---")
-        try:
-            consolidator = Consolidator()
-            consolidator.consolidate()
-        except Exception as e:
-            print(f"\n[ERRO] Falha na consolidação de dados: {e}")
+        logger.info("Etapa 4/5: normalizando dados de Silver para Silver reviewed")
+        Normalizer().normalize()
+
+        # ---------------------------------------------------------
+        # ETAPA 5: Consolidação de Dados (Silver reviewed -> Gold)
+        # ---------------------------------------------------------
+        logger.info(
+            "Etapa 5/5: consolidando dados de Silver reviewed para Gold"
+        )
+        consolidator = Consolidator()
+        consolidator.consolidate()
+        logger.info("Execução finalizada.")
+    except Exception:
+        logger.exception("A execução foi interrompida por um erro.")
+        raise
     finally:
         instagram.close()
 

@@ -1,8 +1,8 @@
-"""Consolidação da camada Silver na camada Gold.
+"""Consolidação da camada Silver reviewed na camada Gold.
 
-Lê os JSONs produzidos por ``SilverWriter``, descarta encartes inválidos e
+Lê os JSONs normalizados, descarta encartes inválidos e
 mantém apenas as linhas de produto cujo campo ``produto`` casa com algum
-item de ``config/segments.yaml``. O resultado é gravado como um único JSON
+item de ``config/product.yaml``. O resultado é gravado como um único JSON
 em ``data/gold/AAAA/MM/DD/ofertas_consolidadas.json`` (escrita atômica) e
 uma cópia em ``data/gold/latest.json``.
 """
@@ -18,8 +18,8 @@ from pathlib import Path
 
 import yaml
 
-from ..core.json_io import write_json_atomic
-from ..core.paths import PROJECT_PATHS, ProjectPaths
+from ..common.json_io import write_json_atomic
+from ..common.paths import PROJECT_PATHS, ProjectPaths
 
 logger = logging.getLogger(__name__)
 
@@ -37,16 +37,16 @@ def _normalize(text: str) -> str:
 
 
 class Consolidator:
-    """Agrega a Silver em um único JSON restrito ao segmento monitorado.
+    """Agrega Silver reviewed em um JSON restrito aos produtos monitorados.
 
     Todos os caminhos têm default resolvido a partir da raiz do projeto,
     então ``Consolidator()`` funciona sem argumentos.
 
     Args:
-        silver_dir: Raiz dos JSONs de extração. Default: ``<root>/data/silver``.
+        silver_dir: Raiz dos JSONs revisados. Default: ``<root>/data/silver_reviewed``.
         gold_dir: Raiz dos JSONs consolidados. Default: ``<root>/data/gold``.
-        segments_path: YAML com a lista ``produtos``/``produto``.
-            Default: ``<root>/config/segments.yaml``.
+        products_path: YAML com a lista ``produtos``/``produto``.
+            Default: ``<root>/config/product.yaml``.
         paths: Caminhos do projeto; permite substituir a raiz padrão.
     """
 
@@ -54,18 +54,18 @@ class Consolidator:
         self,
         silver_dir: Path | None = None,
         gold_dir: Path | None = None,
-        segments_path: Path | None = None,
+        products_path: Path | None = None,
         paths: ProjectPaths | None = None,
     ) -> None:
         project_paths = paths or PROJECT_PATHS
         self.silver_dir = (
-            Path(silver_dir) if silver_dir else project_paths.silver_dir
+            Path(silver_dir) if silver_dir else project_paths.silver_reviewed_dir
         )
         self.gold_dir = Path(gold_dir) if gold_dir else project_paths.gold_dir
-        self.segments_path = (
-            Path(segments_path)
-            if segments_path
-            else project_paths.segments_config
+        self.products_path = (
+            Path(products_path)
+            if products_path
+            else project_paths.product_config
         )
 
     # ------------------------------------------------------------------ #
@@ -126,7 +126,7 @@ class Consolidator:
 
         payload = {
             "gerado_em": now.isoformat(timespec="seconds"),
-            "segments_path": str(self.segments_path),
+            "product_path": str(self.products_path),
             "silver_dir": str(self.silver_dir),
             "produtos_alvo": targets,
             "resumo": {
@@ -152,10 +152,10 @@ class Consolidator:
     # Internos
     # ------------------------------------------------------------------ #
     def _load_targets(self) -> list[str]:
-        if not self.segments_path.exists():
-            logger.warning("segments.yaml não encontrado: %s", self.segments_path)
+        if not self.products_path.exists():
+            logger.warning("product.yaml não encontrado: %s", self.products_path)
             return []
-        with self.segments_path.open("r", encoding="utf-8") as f:
+        with self.products_path.open("r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
         targets = [
             _normalize(str(item["produto"]))
@@ -164,12 +164,12 @@ class Consolidator:
         ]
         targets = [t for t in targets if t]
         if not targets:
-            logger.warning("Nenhum produto em %s", self.segments_path)
+            logger.warning("Nenhum produto em %s", self.products_path)
         return targets
 
     def _iter_silver_files(self):
         if not self.silver_dir.exists():
-            logger.warning("Silver inexistente: %s", self.silver_dir)
+            logger.warning("Silver reviewed inexistente: %s", self.silver_dir)
             return []
         return sorted(self.silver_dir.rglob("*.json"))
 

@@ -1,0 +1,195 @@
+marcas:
+  - nome_oficial: "Betânia"
+    aliases: ["BETANIA", "BETANIA LACTEOS", "BETANIA LATICINIOS"]
+
+  - nome_oficial: "Lebom"
+    aliases: ["LE BOM", "LEBOM"]
+
+  - nome_oficial: "Jaguaribe"
+    aliases: ["LEITE JAGUARIBE", "JAGUARIBE LACTEOS"]
+
+  - nome_oficial: "Cilpe"
+    aliases: ["CILPE"]
+
+  - nome_oficial: "Latimilk"
+    aliases: ["LATI MILK", "LATIMILK"]
+
+  - nome_oficial: "Maranguape"
+    aliases: ["MARANGUAPE LATICINIOS", "LEITE MARANGUAPE"]
+
+  - nome_oficial: "Camponesa"
+    aliases: ["CAMPONESA"]
+
+  - nome_oficial: "Isis"
+    aliases: ["ISIS LATICINIOS"]
+
+  - nome_oficial: "Cambí"
+    aliases: ["CAMBI", "CAMBI LATICINIOS"]
+
+  - nome_oficial: "Caraúba"
+    aliases: ["CARAUBA"]
+
+  - nome_oficial: "Davaca"
+    aliases: ["DA VACA", "DAVACA"]
+
+  - nome_oficial: "Natville"
+    aliases: ["NAT VILLE", "NATVILLE"]
+
+  - nome_oficial: "Itacolomy"
+    aliases: ["ITACOLOMY", "ITACOLOMI"]
+
+  - nome_oficial: "Vale Milk"
+    aliases: ["VALEMILK", "VALE MILK"]
+
+  - nome_oficial: "Veneza"
+    aliases: ["VENEZA LATICINIOS"]
+
+  - nome_oficial: "Leitelirio"
+    aliases: ["LEITE LIRIO", "LEITELIRIO"]
+
+  - nome_oficial: "Sabor & Vida"
+    aliases: ["SABOR E VIDA", "SABOR VIDA"]
+
+  - nome_oficial: "Sítio Sabiá"
+    aliases: ["SITIO SABIA"]
+
+  - nome_oficial: "Vale da Serra"
+    aliases: ["VALE DA SERRA LATICINIOS"]
+
+  - nome_oficial: "Vale do Sertão"
+    aliases: ["VALE DO SERTAO", "VALE DO SERTAO LATICINIOS"]
+
+  - nome_oficial: "Vovó Neta"
+    aliases: ["VOVO NETA", "VOVO NETA LATICINIOS"]
+
+  - nome_oficial: "Natural Gurt"
+    aliases: ["NATURALGURT", "NATURAL GURT"]
+
+  - nome_oficial: "Federicci"
+    aliases: ["FEDERICCI"]
+
+  - nome_oficial: "Campanella"
+    aliases: ["CAMPANELLA"]
+
+  - nome_oficial: "Dudico"
+    aliases: ["DUDICO"]
+
+  - nome_oficial: "Coopag"
+    aliases: ["COOPAG"]
+
+  - nome_oficial: "Leitíssimo"
+    aliases: ["LEITISSIMO"]
+
+  - nome_oficial: "Bom Leite"
+    aliases: ["BOMLEITE", "BOM LEITE"]
+
+  - nome_oficial: "Polilac"
+    aliases: ["POLILAC"]
+
+  - nome_oficial: "Valelac"
+    aliases: ["VALELAC"]
+
+  - nome_oficial: "Nestlé"
+    aliases: ["NESTLE", "NESTLE BRASIL"]
+
+  - nome_oficial: "Ninho"
+    aliases: ["NINHO FORTI+", "NINHO FORTI PLUS"]
+
+  - nome_oficial: "Molico"
+    aliases: ["MOLICO"]
+
+  - nome_oficial: "Piracanjuba"
+    aliases: ["PIRACANJUBA"]
+
+  - nome_oficial: "Italac"
+    aliases: ["ITALAC"]
+
+  - nome_oficial: "Itambé"
+    aliases: ["ITAMBE"]
+
+  - nome_oficial: "Danone"
+    aliases: ["DANONE"]
+
+  - nome_oficial: "Vigor"
+    aliases: ["VIGOR"]
+
+  - nome_oficial: "Batavo"
+    aliases: ["BATAVO"]
+
+  - nome_oficial: "Elegê"
+    aliases: ["ELEGE"]
+
+  - nome_oficial: "Parmalat"
+    aliases: ["PARMALAT"]
+
+  - nome_oficial: "Président"
+    aliases: ["PRESIDENT", "PRESIDENTE"]
+
+  - nome_oficial: "Galbani"
+    aliases: ["GALBANI"]
+
+  - nome_oficial: "Chambinho"
+    aliases: ["CHAMBINHO"]
+
+  - nome_oficial: "Chamyto"
+    aliases: ["CHAMYTO"]
+
+  - nome_oficial: "Chandelle"
+    aliases: ["CHANDELLE"]
+
+  - nome_oficial: "Neston"
+    aliases: ["NESTON"]
+
+  - nome_oficial: "Nesfit"
+    aliases: ["NESFIT"]
+
+  - nome_oficial: "Activia"
+    aliases: ["ACTIVIA"]
+
+  - nome_oficial: "Danoninho"
+    aliases: ["DANONINHO"]
+
+  - nome_oficial: "YoPRO"
+    aliases: ["YOPRO", "YO PRO"]
+
+  - nome_oficial: "Tirol"
+    aliases: ["TIROL"]
+
+  - nome_oficial: "Frimesa"
+    aliases: ["FRIMESA"]
+
+  - nome_oficial: "Aurora"
+    aliases: ["AURORA ALIMENTOS"]
+
+  - nome_oficial: "Tirolez"
+    aliases: ["TIROLEZ"]
+
+  - nome_oficial: "Laguna"
+    aliases: ["LAGUNA"]
+
+  - nome_oficial: "Polenghi"
+    aliases: ["POLENGHI"]
+
+  - nome_oficial: "Scala"
+    aliases: ["SCALA LATICINIOS"]
+
+  - nome_oficial: "Aviação"
+    aliases: ["AVIACAO", "MANTEIGA AVIACAO"]
+
+  - nome_oficial: "Porto Alegre"
+    aliases: ["LATICINIOS PORTO ALEGRE"]
+
+  - nome_oficial: "LeitBom"
+    aliases: ["LEIT BOM", "LEITBOM"]
+
+  - nome_oficial: "Emana"
+    aliases: ["EMANA"]
+
+  - nome_oficial: "Alvoar"
+    aliases: ["ALVOAR LACTEOS", "ALVOAR"]
+
+  - nome_oficial: "Itambé Pro"
+    aliases: ["ITAMBE PRO"]
+
+  - nome_oficial: "Piracanjuba ProForce"
+    aliases: ["PROFORCE", "PIRACANJUBA PROFORCE"]

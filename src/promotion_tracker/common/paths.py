@@ -29,6 +29,10 @@ class ProjectPaths:
         return self.data_dir / "silver"
 
     @property
+    def silver_reviewed_dir(self) -> Path:
+        return self.data_dir / "silver_reviewed"
+
+    @property
     def gold_dir(self) -> Path:
         return self.data_dir / "gold"
 
@@ -41,8 +45,16 @@ class ProjectPaths:
         return self.config_dir / "networks.yaml"
 
     @property
-    def segments_config(self) -> Path:
-        return self.config_dir / "segments.yaml"
+    def product_config(self) -> Path:
+        return self.config_dir / "product.yaml"
+
+    @property
+    def product_aliases_config(self) -> Path:
+        return self.config_dir / "product_aliases.yaml"
+
+    @property
+    def brands_config(self) -> Path:
+        return self.config_dir / "brands.yaml"
 
     @property
     def edge_profile_dir(self) -> Path:

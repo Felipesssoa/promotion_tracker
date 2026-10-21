@@ -1,8 +1,8 @@
 import json
 
 from promotion_tracker.consolidation.consolidator import Consolidator
-from promotion_tracker.core.json_io import write_json_atomic
-from promotion_tracker.core.paths import ProjectPaths
+from promotion_tracker.common.json_io import write_json_atomic
+from promotion_tracker.common.paths import ProjectPaths
 
 
 def test_project_paths_resolve_pipeline_directories(tmp_path):
@@ -10,9 +10,14 @@ def test_project_paths_resolve_pipeline_directories(tmp_path):
 
     assert paths.bronze_dir == tmp_path / "data" / "bronze"
     assert paths.silver_dir == tmp_path / "data" / "silver"
+    assert paths.silver_reviewed_dir == tmp_path / "data" / "silver_reviewed"
     assert paths.gold_dir == tmp_path / "data" / "gold"
     assert paths.networks_config == tmp_path / "config" / "networks.yaml"
-    assert paths.segments_config == tmp_path / "config" / "segments.yaml"
+    assert paths.product_config == tmp_path / "config" / "product.yaml"
+    assert paths.product_aliases_config == (
+        tmp_path / "config" / "product_aliases.yaml"
+    )
+    assert paths.brands_config == tmp_path / "config" / "brands.yaml"
 
 
 def test_consolidator_uses_injected_project_paths(tmp_path):
@@ -20,19 +25,21 @@ def test_consolidator_uses_injected_project_paths(tmp_path):
 
     consolidator = Consolidator(paths=paths)
 
-    assert consolidator.silver_dir == paths.silver_dir
+    assert consolidator.silver_dir == paths.silver_reviewed_dir
     assert consolidator.gold_dir == paths.gold_dir
-    assert consolidator.segments_path == paths.segments_config
+    assert consolidator.products_path == paths.product_config
 
 
-def test_consolidator_reads_silver_and_writes_gold_under_project_root(tmp_path):
+def test_consolidator_reads_reviewed_silver_and_writes_gold(tmp_path):
     paths = ProjectPaths(root=tmp_path)
     paths.config_dir.mkdir(parents=True)
-    paths.segments_config.write_text(
-        "produtos:\n  - produto: arroz\n",
+    paths.product_config.write_text(
+        "produtos:\n  - produto: Arroz\n",
         encoding="utf-8",
     )
-    silver_file = paths.silver_dir / "2026" / "10" / "21" / "story.json"
+    silver_file = (
+        paths.silver_reviewed_dir / "2026" / "10" / "21" / "story.json"
+    )
     silver_file.parent.mkdir(parents=True)
     silver_file.write_text(
         json.dumps({

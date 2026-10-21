@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 import cv2
 import numpy as np
@@ -5,7 +6,10 @@ import os
 import shutil
 import tempfile
 
-from ..core.paths import PROJECT_PATHS
+from ..common.paths import PROJECT_PATHS
+
+
+logger = logging.getLogger(__name__)
 
 
 class OCRImageEnhancer:
@@ -34,7 +38,7 @@ class OCRImageEnhancer:
         if self.safe_model_path.exists():
             self.safe_model_path.unlink()
 
-        print(f"✅ IA configurada (ESPCN 4x limpo).")
+        logger.info("Aprimorador ESPCN x4 configurado.")
 
     @staticmethod
     def _read_image_unicode(path: Path):
@@ -67,19 +71,26 @@ class OCRImageEnhancer:
 
         total_count = len(images)
         if total_count == 0:
+            logger.info("Nenhuma imagem da Bronze precisa de melhoria.")
             return
 
-        print(f"📸 Processando {total_count} imagens...\n")
+        logger.info("Melhorando %d imagens da Bronze.", total_count)
         for index, image_path in enumerate(images, start=1):
-            print(f"[{index}/{total_count}] Processando: {image_path.name}")
+            logger.info(
+                "[%d/%d] Processando imagem: %s",
+                index,
+                total_count,
+                image_path.name,
+            )
             try:
                 self._enhance_for_ocr(image_path)
-            except Exception as e:
-                print(f"   ⚠️ Erro: {e}")
+            except Exception:
+                logger.exception("Falha ao melhorar a imagem %s.", image_path)
 
     def _enhance_for_ocr(self, path: Path):
         image = self._read_image_unicode(path)
         if image is None:
+            logger.warning("Não foi possível ler a imagem: %s", path)
             return
 
         # 1. Proteção de RAM (limita a 800px antes do upscale)
@@ -96,4 +107,6 @@ class OCRImageEnhancer:
         final_path = path.with_name(f"{path.stem}_ocr.png")
 
         if self._write_image_unicode(final_path, upscaled_image):
-            print(f"   ✔️ Imagem 4x colorida salva.")
+            logger.info("Imagem melhorada salva: %s", final_path)
+        else:
+            logger.error("Não foi possível salvar a imagem melhorada: %s", final_path)

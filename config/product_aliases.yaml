@@ -1,0 +1,120 @@
+# config/product_aliases.yaml
+
+abreviacoes:
+  - produto: "pasteurizado"
+    termos:
+      - "PAST"
+      - "PASTEUR"
+      - "PASTEURIZADO"
+      - "PASTEURIZADA"
+      - "LEITE PAST"
+      - "LEITE PASTEURIZADO"
+      - "LEITE C"
+
+  - produto: "Longa Vida"
+    termos:
+      - "LONGA VIDA"
+      - "L VIDA"
+      - "L. VIDA"
+      - "LEITE LONGA VIDA"
+      - "LEITE LV"
+      - "LV"
+      - "LEITE L.V"
+      - "L.V"
+      - "UHT"
+      - "LEITE UHT"
+      - "LEITE U.H.T"
+      - "U.H.T"
+
+  - produto: "Iogurte"
+    termos:
+      - "IOG"
+      - "IOGUR"
+      - "IOGURTE"
+      - "IOGURTES"
+      - "YOG"
+      - "YOGURTE"
+      - "YOGURT"
+      - "IOG NAT"
+      - "IOG NATURAL"
+
+  - produto: "Queijo"
+    termos:
+      - "QUEIJO"
+      - "QUEIJ"
+      - "QJO"
+      - "QJ"
+      - "MUSSARELA"
+      - "MUCARELA"
+      - "MUSS"
+      - "PARMESAO"
+      - "PRATO"
+      - "COALHO"
+      - "RICOTA"
+
+  - produto: "Requeijão"
+    termos:
+      - "REQ"
+      - "REQUEIJAO"
+      - "REQUEIJ"
+      - "REQUEI"
+      - "REQUEIJAO CREMOSO"
+      - "REQ CREMOSO"
+      - "REQ CREM"
+      - "REQUEIJAO BISNAGA"
+      - "REQ BISNAGA"
+      - "REQUEIJAO COPO"
+      - "REQ COPO"
+
+  - produto: "Manteiga"
+    termos:
+      - "MANT"
+      - "MANTEIGA"
+      - "MANT VEG"
+      - "MANTEIGA COM SAL"
+      - "MANTEIGA SEM SAL"
+
+  - produto: "Doce de Leite"
+    termos:
+      - "DOCE DE LEITE"
+      - "DOCE LEITE"
+      - "D LEITE"
+      - "D. LEITE"
+      - "DOCE L"
+      - "DDL"
+
+  - produto: "Coalhada"
+    termos:
+      - "COALHADA"
+      - "COALH"
+      - "COALHADA NATURAL"
+
+  - produto: "Ricota"
+    termos:
+      - "RIC"
+      - "RICOTA"
+      - "RICOTA FRESCA"
+      - "QUEIJO RICOTA"
+
+  - produto: "Bebida Láctea"
+    termos:
+      - "BEBIDA LACTEA"
+      - "BEB LACTEA"
+      - "BEB LACT"
+      - "BEB LAC"
+      - "BEB L"
+      - "BL"
+      - "BEBIDA L"
+      - "BEB LÁCTEA"
+      - "BEBIDA LACT FERMENTADA"
+      - "BEBIDA LACTEA FERMENTADA"
+
+  - produto: "Creme de Ricota"
+    termos:
+      - "CREME DE RICOTA"
+      - "CREME RICOTA"
+      - "CR RICOTA"
+      - "CR. RICOTA"
+      - "CREM RICOTA"
+      - "CREME RIC"
+      - "CREM RIC"

@@ -14,7 +14,8 @@ from pathlib import Path
 
 from PIL import Image
 
-from ..core.json_io import write_json_atomic
+from ..common.json_io import write_json_atomic
+from ..common.products import ProductCatalog
 from .llm.schemas import ResultadoExtracao
 
 logger = logging.getLogger(__name__)
@@ -27,10 +28,15 @@ class SilverWriter:
         bronze_dir: Raiz das imagens de entrada.
         silver_dir: Raiz dos JSONs de saída.
         model_name: Nome do modelo usado, incluído no JSON final.
+        product_catalog: Catálogo usado para gravar produtos pelo nome canônico.
     """
 
     def __init__(
-        self, bronze_dir: Path, silver_dir: Path, model_name: str
+        self,
+        bronze_dir: Path,
+        silver_dir: Path,
+        model_name: str,
+        product_catalog: ProductCatalog | None = None,
     ) -> None:
         """Inicializa o escritor com as raízes de entrada e saída.
 
@@ -38,10 +44,12 @@ class SilverWriter:
             bronze_dir: Diretório raiz da camada Bronze.
             silver_dir: Diretório raiz da camada Silver.
             model_name: Identificador do modelo para registrar nos resultados.
+            product_catalog: Alias configurado para mapear produtos extraídos.
         """
         self.bronze_dir = bronze_dir
         self.silver_dir = silver_dir
         self.model_name = model_name
+        self.product_catalog = product_catalog or ProductCatalog()
 
     def json_path(self, image_path: Path) -> Path:
         """Calcula o JSON de saída correspondente a uma imagem Bronze.
@@ -151,8 +159,11 @@ class SilverWriter:
                 )
 
             for variant in variants:
+                reviewed_product = self.product_catalog.normalize_name(
+                    variant.produto
+                )
                 key = (
-                    variant.produto.casefold(),
+                    (reviewed_product or variant.produto).casefold(),
                     variant.quantidade,
                     variant.unidade_medida,
                     offer.preco_atual,
@@ -164,7 +175,9 @@ class SilverWriter:
                 lines.append({
                     "oferta_compartilhada": is_shared_offer,
                     "variantes_na_oferta": len(variants),
-                    "produto": variant.produto,
+                    "produto": reviewed_product,
+                    "produto_original": variant.produto,
+                    "produto_revisado": reviewed_product,
                     "marca": variant.marca,
                     "quantidade": variant.quantidade,
                     "unidade_medida": variant.unidade_medida,

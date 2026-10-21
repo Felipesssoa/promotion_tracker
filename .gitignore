@@ -24,9 +24,14 @@ env/
 htmlcov/
 
 # Local application data and browser profile
-data/bronze/
-data/silver/
-data/gold/
+data/bronze/*
+!data/bronze/.gitkeep
+data/silver/*
+!data/silver/.gitkeep
+data/silver_reviewed/*
+!data/silver_reviewed/.gitkeep
+data/gold/*
+!data/gold/.gitkeep
 edge_ig_profile/
 logs/
 

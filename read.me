@@ -3,11 +3,11 @@ data/bronze/            Imagens de entrada
 
 Aplicação Python para monitorar ofertas de varejo publicadas em Stories. O projeto contém componentes para autenticar o Microsoft Edge, coletar Stories, guardar imagens na camada Bronze, opcionalmente ampliar as imagens e extrair ofertas com OCR e um modelo de visão executado pelo Ollama.
 
-O fluxo é dividido em ingestão e processamento. A ingestão pode coletar imagens do Instagram para a Bronze. A extração lê imagens existentes na Bronze e grava resultados estruturados na Silver. A consolidação filtra os resultados da Silver pelo segmento configurado e publica a Gold.
+O fluxo de dados segue Bronze -> Silver -> Silver reviewed -> Gold. A ingestão guarda imagens na Bronze; a extração identifica e grava ofertas na Silver; a normalização revisa marcas e produtos e publica cópias em Silver reviewed; por fim, a consolidação gera a Gold a partir dos dados revisados.
 
 ## Estado atual
 
-O comando `promotion-tracker` executa `promotion_tracker.main:main`. No estado atual, `main.py` instancia o cliente do Instagram, mas as chamadas `connect()` e `get_stories()` estão comentadas. A etapa do ampliador também está comentada. Portanto, esse comando processa imagens que já existem em `data/bronze/`; ele não coleta Stories nem amplia imagens automaticamente.
+O comando `promotion-tracker` executa `promotion_tracker.main:main`. No estado atual, `main.py` instancia o cliente do Instagram, mas as chamadas `connect()` e `get_stories()`, a etapa do ampliador e a extração estão comentadas. Portanto, o comando não coleta nem extrai imagens da Bronze: ele normaliza os JSONs já existentes em `data/silver/` e consolida `data/silver_reviewed/`.
 
 Os componentes de ingestão e melhoria podem ser executados separadamente pelo código Python, conforme descrito abaixo.
 
@@ -22,25 +22,26 @@ A autenticação do Instagram é manual e usa um perfil isolado em `edge_ig_prof
 
 ## Instalação
 
-Crie e ative um ambiente virtual:
+Instale o Poetry caso ainda não esteja disponível:
 
 ```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
+python -m pip install --user poetry
 ```
 
-Instale todas as dependências usadas nas etapas disponíveis:
+Use o mesmo comando `python` para executar o Poetry nos próximos passos. Isso
+evita depender de o diretório de scripts do Python estar configurado no
+`PATH` do Windows.
+
+Instale o projeto e todas as dependências opcionais (OCR, fuzzy matching e
+melhoria de imagem). O Poetry cria e gerencia o ambiente virtual:
 
 ```powershell
-python -m pip install -e ".[ocr,fuzzy,enhancement,dev]"
+python -m poetry install --all-extras
 ```
 
-O projeto também fornece `requirements.txt` com as dependências de runtime e os extras de OCR, fuzzy matching e melhoria de imagem. Para instalar por esse arquivo:
-
-```powershell
-python -m pip install -r requirements.txt
-```
+Adicione dependências com `python -m poetry add <pacote>`; para dependências
+de desenvolvimento, use `python -m poetry add --group dev <pacote>`. O arquivo
+`requirements.txt` permanece disponível para instalações legadas com pip.
 
 Instale o modelo de visão usado por padrão:
 
@@ -61,15 +62,19 @@ networks:
 	- profile: exemplo_de_perfil
 ```
 
-### Produtos do segmento
+### Produtos monitorados e aliases
 
-`config/segments.yaml` contém uma lista `produtos`; cada item deve ter uma chave `produto`. Os nomes são normalizados para a busca pelo OCR e usados na segunda consulta de confirmação do LLM.
+`config/product.yaml` contém a lista canônica de produtos monitorados. `config/product_aliases.yaml` relaciona abreviações e termos encontrados em encartes a cada produto canônico. O OCR considera esses termos ao decidir quais imagens processar e quais regiões recortar. A extração já grava abreviações reconhecidas usando o nome canônico: por exemplo, `REQ` vira `Requeijão`, `QJ` vira `Queijo`, `BEB LAC` vira `Bebida Láctea` e `UHT` vira `Longa Vida`.
 
 ```yaml
 produtos:
-	- produto: arroz
-	- produto: leite
+  - produto: "Longa Vida"
+  - produto: "Requeijão"
 ```
+
+### Marcas
+
+`config/brands.yaml` define `nome_oficial` e `aliases` para cada marca. A normalização compara marcas extraídas com esse catálogo usando correspondência exata e similaridade via `difflib`. Correspondências ambíguas ou abaixo do limite de similaridade são mantidas sem alteração.
 
 ### Parâmetros de execução
 
@@ -82,10 +87,10 @@ produtos:
 `ImageStorage` e `StoryCollector` armazenam capturas em:
 
 ```text
-data/bronze/AAAA/MM/DD/<perfil>/story_NNN.png
+data/bronze/AAAA/MM/DD/<perfil>/<perfil>_HH_MM_SS.png
 ```
 
-O nome do perfil é sanitizado para uso como diretório e a numeração avança para não sobrescrever uma imagem existente. `ImageStorage.save_image()` retorna um caminho; quem grava os bytes é o coletor.
+O perfil é sanitizado para uso no nome do arquivo e no diretório. O horário local é registrado no momento da captura, com hora, minuto e segundo. Se duas capturas do mesmo perfil ocorrerem no mesmo segundo, um sufixo numérico (`_002`, por exemplo) evita sobrescrever uma imagem. `ImageStorage.save_image()` retorna um caminho; quem grava os bytes é o coletor.
 
 ### Silver
 
@@ -95,15 +100,19 @@ Por padrão, JSONs existentes são ignorados (`skip_existing=True`). Para reproc
 
 Um resultado válido inclui metadados como `perfil`, `arquivo_origem`, `data_processamento`, `modelo`, `validade`, `produtos_encontrados` e `quantidade_produtos`, além da lista `produtos`. Cada produto contém nome, marca, quantidade, unidade, preços e informações de oferta compartilhada. Imagens descartadas também recebem JSON, com `encarte_valido: false` e o motivo da decisão.
 
-Os JSONs são gravados atomicamente: o conteúdo é escrito em um temporário e depois substitui o destino final. Com `debug=True`, respostas brutas e imagens enviadas ao modelo são salvas ao lado do JSON.
+Abreviações reconhecidas já são convertidas no JSON Silver. Cada linha também registra `produto_original` e `produto_revisado`, preservando a forma recebida do modelo e o nome canônico aplicado.
+
+### Silver reviewed
+
+`Normalizer` lê os JSONs da Silver e cria cópias com a mesma estrutura de diretórios em `data/silver_reviewed/`, sem modificar os originais. Em cada produto, grava `produto_original`/`produto_revisado` e `marca_original`/`marca_revisada`; os campos principais `produto` e `marca` recebem os valores revisados. Marcas reconhecidas usam a grafia oficial de `brands.yaml`; valores sem correspondência confiável permanecem como vieram. JSONs revisados que não têm mais um correspondente na Silver são removidos para evitar que dados antigos entrem na Gold.
 
 ### Gold
 
-`Consolidator` lê os JSONs da Silver, mantém somente produtos que correspondem a `config/segments.yaml` e grava uma consolidação diária em `data/gold/AAAA/MM/DD/ofertas_consolidadas.json`. Também atualiza `data/gold/latest.json`. As gravações JSON da Silver e da Gold usam a mesma rotina atômica.
+`Consolidator` lê os JSONs de `data/silver_reviewed/`, mantém produtos correspondentes à lista em `config/product.yaml` e grava uma consolidação diária em `data/gold/AAAA/MM/DD/ofertas_consolidadas.json`. Também atualiza `data/gold/latest.json`. As gravações JSON usam escrita atômica.
 
-### Caminhos compartilhados
+### Utilitários compartilhados
 
-`src/promotion_tracker/core/paths.py` centraliza a raiz do projeto e os caminhos de configuração, modelos e camadas Bronze, Silver e Gold. Os componentes do pipeline usam `PROJECT_PATHS`; `ProjectPaths` também permite fornecer outra raiz quando necessário. `src/promotion_tracker/core/json_io.py` reúne a escrita atômica de JSON utilizada na persistência Silver e Gold.
+`src/promotion_tracker/common/paths.py` centraliza os caminhos do projeto, incluindo Bronze, Silver, Silver reviewed, Gold e configurações. `common/json_io.py` reúne a escrita atômica de JSON, e `common/products.py` carrega o catálogo e converte aliases para o nome canônico.
 
 ## Componentes
 
@@ -111,7 +120,7 @@ Os JSONs são gravados atomicamente: o conteúdo é escrito em um temporário e 
 
 - `ingestion/instagram_client.py`: inicia o Edge com depuração remota, conecta-se via Playwright, verifica a sessão e solicita login manual quando necessário. O context manager `InstagramClient` conecta ao entrar e encerra os recursos ao sair.
 - `ingestion/story_collector.py`: lê os perfis do YAML, navega pelos Stories, espera a mídia carregar, oculta temporariamente elementos da interface e salva capturas na Bronze. Erros em um perfil são registrados no resultado e não impedem as tentativas seguintes.
-- `ingestion/image_storage.py`: cria o caminho diário por perfil e escolhe o próximo nome `story_NNN.png`; o coletor é responsável por gravar a captura nesse caminho.
+- `ingestion/image_storage.py`: cria o caminho diário por perfil com o horário da captura (`<perfil>_HH_MM_SS.png`); um sufixo numérico distingue capturas no mesmo segundo. O coletor é responsável por gravar a imagem nesse caminho.
 
 Exemplo para executar a ingestão diretamente:
 
@@ -139,13 +148,16 @@ enhancer.process_bronze_folder()
 
 ### Extração
 
-- `extraction/llm_extractor.py`: mantém a API pública `LLMExtractor`, processa imagens em lote, carrega produtos de `segments.yaml` e coordena OCR, LLM e gravação Silver.
+- `extraction/llm_extractor.py`: mantém a API pública `LLMExtractor`, processa imagens em lote, carrega os produtos e aliases YAML e coordena OCR, LLM e gravação Silver.
 - `extraction/ocr/analyzer.py`: executa PaddleOCR, procura produtos, localiza preços e calcula regiões candidatas. Quando não há posições confiáveis, solicita o envio da imagem inteira.
 - `extraction/ocr/matching.py`: normaliza texto e compara nomes de produto com tolerância a espaços, texto colado e fuzzy matching opcional.
 - `extraction/llm/service.py`: prepara imagens, faz a extração e a consulta de revisita, e administra o servidor Ollama.
 - `extraction/llm/schemas.py`: define os contratos Pydantic e normaliza respostas, valores, unidades e datas.
 - `extraction/silver_writer.py`: expande ofertas em linhas de produto, atualiza estatísticas e grava resultados JSON na Silver.
 - `extraction/settings.py`: configura desempenho do modelo, opções de OCR e recortes, matching e ciclo de vida do Ollama.
+- `common/products.py`: carrega `product.yaml` e `product_aliases.yaml`, fornecendo os termos canônicos para o OCR e para a escrita Silver.
+- `normalization/normalizer.py`: revisa marcas e produtos da Silver, gerando JSONs paralelos em `silver_reviewed/`.
+- `consolidation/consolidator.py`: consolida os registros revisados na camada Gold.
 
 Fluxo por imagem:
 
@@ -153,25 +165,41 @@ Fluxo por imagem:
 2. Com `CROP_PRODUCTS=False` (padrão), o modelo recebe a imagem inteira. Se ativado, o OCR localiza e monta recortes das ofertas.
 3. O Ollama classifica a imagem, extrai ofertas e a resposta é validada pelos schemas Pydantic.
 4. Uma segunda consulta usa a imagem inteira para confirmar produtos da lista de referência.
-5. O `SilverWriter` expande as variantes e grava um JSON válido ou um registro de imagem descartada.
+5. O `SilverWriter` converte aliases conhecidos para os nomes canônicos e grava um JSON válido ou um registro de imagem descartada na Silver.
+6. O `Normalizer` revisa marca e produto, preserva os valores originais e escreve a camada Silver reviewed.
+7. O `Consolidator` consome Silver reviewed e publica os resultados na Gold.
 
 O servidor `ollama serve` é iniciado automaticamente quando `MANAGE_OLLAMA_SERVER=True` e não há um servidor disponível. No encerramento, o serviço descarrega o modelo ou encerra processos Ollama conforme `TERMINATE_EXISTING_SERVER`.
 
 ## Execução
 
-Com o ambiente virtual ativo e as imagens já presentes na Bronze:
+Com as dependências instaladas pelo Poetry e as imagens já presentes na
+Bronze, execute a partir da raiz do projeto:
 
 ```powershell
-promotion-tracker
+python -m poetry run python .\src\promotion_tracker\main.py
 ```
 
-Alternativamente:
+O progresso das etapas e os avisos são exibidos no terminal. Os detalhes de
+DEBUG e os demais registros também são gravados em um arquivo diário,
+organizado por ano e mês, por exemplo:
+
+```text
+logs/2026/10/promotion_tracker_2026-10-21.log
+```
+
+Os diretórios e arquivos são criados automaticamente e permanecem fora do
+controle de versão.
+
+O caminho dos imports é resolvido em relação ao arquivo `main.py`, então o
+diretório de trabalho pode ser outro. Fora da raiz, informe o caminho absoluto
+do projeto ao Poetry e o caminho absoluto do script:
 
 ```powershell
-python -m promotion_tracker.main
+python -m poetry -C "C:\caminho\promotion_tracker" run python "C:\caminho\promotion_tracker\src\promotion_tracker\main.py"
 ```
 
-O comando executa a extração nas imagens Bronze e aguarda Enter ao final para fechar o programa. Para chamar o extrator diretamente:
+No estado atual, a coleta e a extração em `main.py` permanecem comentadas. Assim, o comando normaliza os JSONs já existentes em `data/silver/` e depois consolida `data/silver_reviewed/`. Para gerar novos JSONs a partir da Bronze, execute o extrator diretamente:
 
 ```python
 from promotion_tracker.extraction.llm_extractor import LLMExtractor
@@ -193,24 +221,29 @@ with LLMExtractor(
 ```text
 config/
 	networks.yaml             Perfis para ingestão
-	segments.yaml             Produtos do segmento
+	product.yaml              Produtos canônicos monitorados
+	product_aliases.yaml      Abreviações e aliases dos produtos
+	brands.yaml               Marcas oficiais e aliases
 	settings.yaml             Espaço reservado, ainda sem leitura pelo código
 core/
-	exception.py              Arquivo vazio/reservado
-	models.py                 Arquivo vazio/reservado
+	exception.py              Arquivo reservado existente
+	models.py                 Arquivo reservado existente
 
+data/
 	bronze/                   Imagens de entrada
 	silver/                   JSONs da extração
-	gold/                     Reservado; consolidação não implementada
+	silver_reviewed/           JSONs normalizados
+	gold/                     Consolidações
 models/
 	ESPCN_x4.pb               Modelo do ampliador opcional
 src/promotion_tracker/
 	main.py                   Ponto de entrada
-	core/                     Caminhos e persistência compartilhados
+	common/                   Catálogos, caminhos, logs e persistência compartilhados
 	ingestion/                Cliente Edge, coleta e caminhos de imagem
 	processing/               Melhoria opcional de imagem
 	extraction/               OCR, matching, Ollama e escrita Silver
-	consolidation/            Consolidação da Silver para Gold
+	normalization/             Revisão da Silver para Silver reviewed
+	consolidation/            Consolidação de Silver reviewed para Gold
 ```
 
 O diretório `extraction/backup/` contém uma cópia antiga do extrator e não participa do fluxo ativo.
@@ -220,9 +253,9 @@ O diretório `extraction/backup/` contém uma cópia antiga do extrator e não p
 As dependências de desenvolvimento são instaladas com:
 
 ```powershell
-python -m pip install -e ".[dev]"
+python -m poetry install
 ```
 
-Execute a suíte automatizada com `python -m pytest`.
+Execute a suíte automatizada com `python -m poetry run pytest`.
 
 `read.me` documenta o estado atual; dados coletados, resultados, perfil local do Edge, ambientes virtuais e credenciais não devem ser versionados. Essas saídas estão listadas no `.gitignore`.

@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["poetry-core>=1.9.0"]
+build-backend = "poetry.core.masonry.api"
 
 [project]
 name = "promotion-tracker"
@@ -19,21 +19,19 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-ocr = [
-	"onnxruntime>=1.18",
-	"paddleocr>=3.0",
-]
+ocr = ["onnxruntime>=1.18", "paddleocr>=3.0"]
 fuzzy = ["rapidfuzz>=3.9"]
 enhancement = ["opencv-contrib-python>=4.10"]
-dev = ["pytest>=8.0", "ruff>=0.6"]
 
 [project.scripts]
 promotion-tracker = "promotion_tracker.main:main"
 
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["promotion_tracker*"]
-namespaces = true
+[tool.poetry]
+packages = [{ include = "promotion_tracker", from = "src" }]
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=8.0"
+ruff = ">=0.6"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

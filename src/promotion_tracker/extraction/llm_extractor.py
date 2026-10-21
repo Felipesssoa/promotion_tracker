@@ -20,10 +20,11 @@ import signal
 import time
 from pathlib import Path
 
-import yaml
 from PIL import Image
 
-from ..core.paths import PROJECT_PATHS
+from ..common.logging_config import configure_logging
+from ..common.paths import PROJECT_PATHS
+from ..common.products import ProductCatalog
 from .ocr.matching import FUZZY_AVAILABLE, normalize_search_text
 from .ocr.analyzer import AnaliseOCR, OCRAnalyzer, RegiaoOferta
 from .silver_writer import SilverWriter
@@ -66,15 +67,7 @@ def _configure_logging(debug: bool) -> None:
     Returns:
         None
     """
-    if not logging.getLogger().handlers:
-        logging.basicConfig(
-            level=logging.INFO,
-            format="%(asctime)s | %(levelname)-7s | %(message)s",
-            datefmt="%H:%M:%S",
-        )
-    logger.setLevel(logging.DEBUG if debug else logging.INFO)
-    for name in ("httpx", "httpcore", "PIL"):
-        logging.getLogger(name).setLevel(logging.WARNING)
+    configure_logging(debug=debug)
 
 
 # ----------------------------------------------------------------------
@@ -88,7 +81,7 @@ class LLMExtractor:
     O OCR acha os produtos do segmento e o encarte é recortado só nas
     regiões desses produtos. O modelo classifica e extrai na mesma resposta,
     validada com Pydantic. Depois, uma segunda chamada ao LLM revisita a
-    imagem inteira para casar os produtos do segments.yaml com o que aparece
+    imagem inteira para casar os produtos do product.yaml com o que aparece
     nela e preencher o campo `produtos_encontrados`
 
     Encerra o servidor Ollama ao final (fim do lote, Ctrl+C, SIGTERM/SIGHUP,
@@ -123,15 +116,22 @@ class LLMExtractor:
         _configure_logging(debug)
 
         self.base_dir = PROJECT_PATHS.root
-        self.segments_path = PROJECT_PATHS.segments_config
+        self.product_catalog = ProductCatalog()
         self.bronze_dir = PROJECT_PATHS.bronze_dir
         self.silver_dir = PROJECT_PATHS.silver_dir
-        self.segment_products = self._load_segment_products()
-        self._ocr_analyzer = OCRAnalyzer(self.segment_products, debug=debug)
+        self.segment_products = self.product_catalog.products
+        self._ocr_analyzer = OCRAnalyzer(
+            self.segment_products,
+            debug=debug,
+            product_aliases=self.product_catalog.search_terms_by_product,
+        )
 
         self.model_name = model_name
         self._silver_writer = SilverWriter(
-            self.bronze_dir, self.silver_dir, self.model_name
+            self.bronze_dir,
+            self.silver_dir,
+            self.model_name,
+            product_catalog=self.product_catalog,
         )
         self._ollama_service = OllamaService(
             self.model_name, self.segment_products, debug, self._silver_writer
@@ -356,53 +356,6 @@ class LLMExtractor:
         """
         return normalize_search_text(text)
 
-    def _load_segment_products(self) -> list[str]:
-        """
-        Carrega e normaliza os produtos do segments.yaml
-
-        Returns:
-            list[str]: Produtos do segmento (normalizados)
-
-        Raises:
-            FileNotFoundError: Se o YAML não existir
-            ValueError: Se o YAML for inválido ou não tiver produtos
-        """
-        if not self.segments_path.is_file():
-            raise FileNotFoundError(
-                f"Arquivo de segmentos não encontrado: {self.segments_path}"
-            )
-
-        try:
-            configuration = yaml.safe_load(
-                self.segments_path.read_text(encoding="utf-8")
-            )
-        except yaml.YAMLError as exc:
-            raise ValueError(
-                f"YAML inválido em {self.segments_path}: {exc}"
-            ) from exc
-
-        items = (
-            configuration.get("produtos")
-            if isinstance(configuration, dict) else None
-        )
-        if not isinstance(items, list):
-            raise ValueError(
-                f"A chave 'produtos' deve ser uma lista em {self.segments_path}"
-            )
-
-        products = {
-            self._normalize_search_text(item["produto"])
-            for item in items
-            if isinstance(item, dict)
-            and isinstance(item.get("produto"), str)
-            and self._normalize_search_text(item["produto"])
-        }
-        if not products:
-            raise ValueError(
-                f"Nenhum produto válido encontrado em {self.segments_path}"
-            )
-        return sorted(products)
-
     # ------------------------------------------------------------------
     # OCR
     # ------------------------------------------------------------------
@@ -590,7 +543,7 @@ class LLMExtractor:
         Envia a imagem (inteira ou recortes) ao LLM e grava o JSON final
 
         Além da extração principal, faz uma segunda chamada ao LLM para
-        casar os produtos do segments.yaml com o que aparece na imagem,
+        casar os produtos do product.yaml com o que aparece na imagem,
         preenchendo `produtos_encontrados` no JSON
 
         Args:

@@ -539,14 +539,28 @@ class OCRAnalyzer:
     ``motivo_ignorada`` para o extrator persistir a decisão.
     """
 
-    def __init__(self, segment_products: list[str], debug: bool = False) -> None:
+    def __init__(
+        self,
+        segment_products: list[str],
+        debug: bool = False,
+        product_aliases: dict[str, list[str]] | None = None,
+    ) -> None:
         """Configura o analisador sem carregar o motor OCR antecipadamente.
 
         Args:
             segment_products: Produtos normalizados que devem ser procurados.
             debug: Habilita amostras detalhadas de texto nos logs.
+            product_aliases: Termos alternativos mapeados para cada produto.
         """
         self.segment_products = segment_products
+        self.product_aliases = product_aliases or {
+            product: [product] for product in segment_products
+        }
+        self._alias_to_product = {
+            normalize_search_text(alias): product
+            for product, aliases in self.product_aliases.items()
+            for alias in aliases
+        }
         self.debug = debug
         self._ocr_reader = None
         self.ignored_reason = ""
@@ -696,7 +710,13 @@ class OCRAnalyzer:
         ocr_text = normalize_search_text(" ".join(texts))
         return [
             product for product in self.segment_products
-            if product_matches(product, ocr_text)
+            if any(
+                product_matches(
+                    normalize_search_text(alias),
+                    ocr_text,
+                )
+                for alias in self.product_aliases.get(product, [product])
+            )
         ]
 
     def analyze(self, image_path: Path) -> AnaliseOCR | None:
@@ -769,11 +789,16 @@ class OCRAnalyzer:
             "Geometria: altura típica de linha=%.0fpx | preços detectados=%d",
             localizador.lh, len(localizador.precos),
         )
-        occurrences = localizador.find_occurrences(found_products)
-        regions = [
-            localizador.region_for(product, indices)
-            for product, indices in occurrences
+        search_terms = [
+            normalize_search_text(alias)
+            for product in found_products
+            for alias in self.product_aliases.get(product, [product])
         ]
+        occurrences = localizador.find_occurrences(search_terms)
+        regions = []
+        for term, indices in occurrences:
+            product = self._alias_to_product.get(term, term)
+            regions.append(localizador.region_for(product, indices))
         located_products = {product for region in regions for product in region.products}
         products_without_region = [
             product for product in found_products if product not in located_products

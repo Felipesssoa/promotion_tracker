@@ -28,6 +28,7 @@ Fluxo principal:
                     -> _restore_interface()
 """
 
+import logging
 from datetime import datetime
 from time import sleep
 from pathlib import Path
@@ -38,8 +39,12 @@ from playwright.sync_api import (
     Page,
     TimeoutError as PlaywrightTimeoutError,
 )
-from ..core.paths import PROJECT_PATHS
+from ..common.paths import PROJECT_PATHS
 from .image_storage import ImageStorage
+
+
+logger = logging.getLogger(__name__)
+
 
 class StoryCollector:
     """
@@ -276,7 +281,7 @@ class StoryCollector:
             if not profile:
                 continue
 
-            print(f"Acessando Stories do perfil: @{profile}")
+            logger.info("Acessando Stories do perfil: @%s", profile)
 
             try:
                 self.page.goto(
@@ -317,8 +322,10 @@ class StoryCollector:
 
 
             except Exception as exc:
-                print(
-                    f"Falha ao coletar Stories de @{profile}: {exc}"
+                logger.exception(
+                    "Falha ao coletar Stories de @%s: %s",
+                    profile,
+                    exc,
                 )
 
                 results.append(
@@ -364,9 +371,10 @@ class StoryCollector:
             story_button.click()
 
         except PlaywrightTimeoutError:
-            print(
-                f"Botão 'Ver story' não apareceu para @{profile}. "
-                "Continuando a verificação."
+            logger.debug(
+                "Botão 'Ver story' não apareceu para @%s; "
+                "continuando a verificação.",
+                profile,
             )
 
         # O indicador pode aparecer e desaparecer rapidamente
@@ -383,12 +391,12 @@ class StoryCollector:
             timeout=30_000,
         )
 
-        print(f"Carregamento concluído para @{profile}.")
+        logger.info("Carregamento concluído para @%s.", profile)
 
     def capture_story(self, profile_name: str) -> Path:
         """Captura a mídia do Story, salva no Bronze e restaura a interface."""
 
-        print(f"[CAPTURA] Iniciando captura de @{profile_name}")
+        logger.info("Iniciando captura do Story de @%s.", profile_name)
 
         try:
             self.page.wait_for_function(
@@ -396,7 +404,7 @@ class StoryCollector:
                 arg=self.MIN_MEDIA_AREA,
                 timeout=15_000,
             )
-            print("[CAPTURA] Mídia carregada")
+            logger.debug("Mídia do Story carregada.")
 
             prepared_capture = self.page.evaluate(
                 self.JS_PREPARE_CAPTURE,
@@ -412,7 +420,7 @@ class StoryCollector:
                     "Não foi encontrada uma mídia adequada."
                 )
 
-            print("[CAPTURA] Interface preparada")
+            logger.debug("Interface preparada para captura.")
 
             self.page.wait_for_timeout(300)
 
@@ -422,7 +430,7 @@ class StoryCollector:
 
             output_path = self.image_storage.save_image(profile_name)
 
-            print(f"[CAPTURA] Caminho recebido: {output_path}")
+            logger.debug("Caminho de saída da captura: %s", output_path)
 
             average_time.screenshot(
                 path=str(output_path),
@@ -437,7 +445,7 @@ class StoryCollector:
             if output_path.stat().st_size == 0:
                 raise RuntimeError("A imagem foi criada, mas está vazia.")
 
-            print(f"[CAPTURA] Imagem salva: {output_path.resolve()}")
+            logger.info("Imagem salva: %s", output_path.resolve())
 
             return output_path
 
@@ -449,7 +457,7 @@ class StoryCollector:
 
         try:
             if self.page.is_closed():
-                print("[RESTAURAÇÃO] A página está fechada.")
+                logger.debug("Página fechada; restauração da interface ignorada.")
                 return
 
             result = self.page.evaluate(
@@ -460,7 +468,7 @@ class StoryCollector:
                 },
             )
 
-            print(f"[RESTAURAÇÃO] Diagnóstico: {result}")
+            logger.debug("Diagnóstico da restauração da interface: %s", result)
 
             if (
                 result["style_exists"]
@@ -471,10 +479,10 @@ class StoryCollector:
                     "A interface continua com elementos marcados."
                 )
 
-            print("[RESTAURAÇÃO] Interface restaurada com sucesso.")
+            logger.debug("Interface restaurada com sucesso.")
 
         except Exception as exc:
-            print(f"[RESTAURAÇÃO] Erro ao restaurar: {exc}")
+            logger.exception("Erro ao restaurar a interface: %s", exc)
             raise
 
     def is_last_story(self):
@@ -493,5 +501,8 @@ class StoryCollector:
             return True
 
         except PlaywrightTimeoutError:
-            print("Botão 'Avançar' não encontrado em 3 segundos. Seguindo...")
+            logger.debug(
+                "Botão 'Avançar' não encontrado em 3 segundos; "
+                "fim dos Stories do perfil."
+            )
             return False
