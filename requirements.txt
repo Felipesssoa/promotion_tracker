@@ -1,0 +1,12 @@
+# Dependências base e extras OCR/fuzzy/upscale definidas em pyproject.toml.
+numpy>=1.24
+ollama>=0.4
+Pillow>=10.0
+playwright>=1.45
+pydantic>=2.7
+python-dotenv>=1.0
+PyYAML>=6.0
+onnxruntime>=1.18
+paddleocr>=3.0
+rapidfuzz>=3.9
+opencv-contrib-python>=4.10

@@ -1,0 +1,228 @@
+data/bronze/            Imagens de entrada
+# Promotion Tracker
+
+Aplicação Python para monitorar ofertas de varejo publicadas em Stories. O projeto contém componentes para autenticar o Microsoft Edge, coletar Stories, guardar imagens na camada Bronze, opcionalmente ampliar as imagens e extrair ofertas com OCR e um modelo de visão executado pelo Ollama.
+
+O fluxo é dividido em ingestão e processamento. A ingestão pode coletar imagens do Instagram para a Bronze. A extração lê imagens existentes na Bronze e grava resultados estruturados na Silver. A consolidação filtra os resultados da Silver pelo segmento configurado e publica a Gold.
+
+## Estado atual
+
+O comando `promotion-tracker` executa `promotion_tracker.main:main`. No estado atual, `main.py` instancia o cliente do Instagram, mas as chamadas `connect()` e `get_stories()` estão comentadas. A etapa do ampliador também está comentada. Portanto, esse comando processa imagens que já existem em `data/bronze/`; ele não coleta Stories nem amplia imagens automaticamente.
+
+Os componentes de ingestão e melhoria podem ser executados separadamente pelo código Python, conforme descrito abaixo.
+
+## Requisitos
+
+- Windows e Microsoft Edge instalado.
+- Python 3.10 ou superior.
+- Ollama instalado e disponível no `PATH` para a extração via modelo.
+- Espaço em disco para imagens coletadas, perfil do navegador e resultados.
+
+A autenticação do Instagram é manual e usa um perfil isolado em `edge_ig_profile/`. O projeto não automatiza o preenchimento de senha. O cliente carrega o arquivo `.env` da raiz, mas atualmente não há variáveis obrigatórias definidas no código.
+
+## Instalação
+
+Crie e ative um ambiente virtual:
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+```
+
+Instale todas as dependências usadas nas etapas disponíveis:
+
+```powershell
+python -m pip install -e ".[ocr,fuzzy,enhancement,dev]"
+```
+
+O projeto também fornece `requirements.txt` com as dependências de runtime e os extras de OCR, fuzzy matching e melhoria de imagem. Para instalar por esse arquivo:
+
+```powershell
+python -m pip install -r requirements.txt
+```
+
+Instale o modelo de visão usado por padrão:
+
+```powershell
+ollama pull qwen2.5vl:latest
+```
+
+Dependendo da distribuição do PaddleOCR para a plataforma, pode ser necessário seguir também as instruções oficiais de instalação do PaddlePaddle.
+
+## Configuração
+
+### Perfis monitorados
+
+`config/networks.yaml` contém uma lista `networks`, cujos itens devem ter a chave `profile`. O `StoryCollector` visita cada perfil dessa lista.
+
+```yaml
+networks:
+	- profile: exemplo_de_perfil
+```
+
+### Produtos do segmento
+
+`config/segments.yaml` contém uma lista `produtos`; cada item deve ter uma chave `produto`. Os nomes são normalizados para a busca pelo OCR e usados na segunda consulta de confirmação do LLM.
+
+```yaml
+produtos:
+	- produto: arroz
+	- produto: leite
+```
+
+### Parâmetros de execução
+
+`config/settings.yaml` existe como espaço reservado e ainda não é lido pelo código. As opções atuais do OCR, dos recortes, do matching e do servidor Ollama estão em `src/promotion_tracker/extraction/settings.py`.
+
+## Camadas de dados
+
+### Bronze
+
+`ImageStorage` e `StoryCollector` armazenam capturas em:
+
+```text
+data/bronze/AAAA/MM/DD/<perfil>/story_NNN.png
+```
+
+O nome do perfil é sanitizado para uso como diretório e a numeração avança para não sobrescrever uma imagem existente. `ImageStorage.save_image()` retorna um caminho; quem grava os bytes é o coletor.
+
+### Silver
+
+O extrator percorre as imagens suportadas (`.png`, `.jpg`, `.jpeg` e `.webp`) e cria um JSON por imagem. A estrutura relativa à Bronze é preservada em `data/silver/`. Imagens com sufixo `_ocr` usam o mesmo nome lógico do arquivo original para o JSON correspondente.
+
+Por padrão, JSONs existentes são ignorados (`skip_existing=True`). Para reprocessar, remova o JSON correspondente ou inicialize `LLMExtractor` com `skip_existing=False`.
+
+Um resultado válido inclui metadados como `perfil`, `arquivo_origem`, `data_processamento`, `modelo`, `validade`, `produtos_encontrados` e `quantidade_produtos`, além da lista `produtos`. Cada produto contém nome, marca, quantidade, unidade, preços e informações de oferta compartilhada. Imagens descartadas também recebem JSON, com `encarte_valido: false` e o motivo da decisão.
+
+Os JSONs são gravados atomicamente: o conteúdo é escrito em um temporário e depois substitui o destino final. Com `debug=True`, respostas brutas e imagens enviadas ao modelo são salvas ao lado do JSON.
+
+### Gold
+
+`Consolidator` lê os JSONs da Silver, mantém somente produtos que correspondem a `config/segments.yaml` e grava uma consolidação diária em `data/gold/AAAA/MM/DD/ofertas_consolidadas.json`. Também atualiza `data/gold/latest.json`. As gravações JSON da Silver e da Gold usam a mesma rotina atômica.
+
+### Caminhos compartilhados
+
+`src/promotion_tracker/core/paths.py` centraliza a raiz do projeto e os caminhos de configuração, modelos e camadas Bronze, Silver e Gold. Os componentes do pipeline usam `PROJECT_PATHS`; `ProjectPaths` também permite fornecer outra raiz quando necessário. `src/promotion_tracker/core/json_io.py` reúne a escrita atômica de JSON utilizada na persistência Silver e Gold.
+
+## Componentes
+
+### Ingestão
+
+- `ingestion/instagram_client.py`: inicia o Edge com depuração remota, conecta-se via Playwright, verifica a sessão e solicita login manual quando necessário. O context manager `InstagramClient` conecta ao entrar e encerra os recursos ao sair.
+- `ingestion/story_collector.py`: lê os perfis do YAML, navega pelos Stories, espera a mídia carregar, oculta temporariamente elementos da interface e salva capturas na Bronze. Erros em um perfil são registrados no resultado e não impedem as tentativas seguintes.
+- `ingestion/image_storage.py`: cria o caminho diário por perfil e escolhe o próximo nome `story_NNN.png`; o coletor é responsável por gravar a captura nesse caminho.
+
+Exemplo para executar a ingestão diretamente:
+
+```python
+from promotion_tracker.ingestion.instagram_client import InstagramClient
+
+with InstagramClient() as instagram:
+		collection_results = instagram.get_stories()
+```
+
+Na primeira execução, o Edge pode abrir para autenticação manual. Após o login, feche a janela aberta para o cliente continuar a conexão de automação.
+
+### Melhoria de imagem
+
+`processing/enhancer.py` implementa `OCRImageEnhancer`, que usa OpenCV e `models/ESPCN_x4.pb` para ampliar imagens PNG da Bronze. As imagens resultantes recebem o sufixo `_ocr.png` ao lado da origem. Essa etapa não é chamada atualmente por `main.py`.
+
+Exemplo de execução direta:
+
+```python
+from promotion_tracker.processing.enhancer import OCRImageEnhancer
+
+enhancer = OCRImageEnhancer()
+enhancer.process_bronze_folder()
+```
+
+### Extração
+
+- `extraction/llm_extractor.py`: mantém a API pública `LLMExtractor`, processa imagens em lote, carrega produtos de `segments.yaml` e coordena OCR, LLM e gravação Silver.
+- `extraction/ocr/analyzer.py`: executa PaddleOCR, procura produtos, localiza preços e calcula regiões candidatas. Quando não há posições confiáveis, solicita o envio da imagem inteira.
+- `extraction/ocr/matching.py`: normaliza texto e compara nomes de produto com tolerância a espaços, texto colado e fuzzy matching opcional.
+- `extraction/llm/service.py`: prepara imagens, faz a extração e a consulta de revisita, e administra o servidor Ollama.
+- `extraction/llm/schemas.py`: define os contratos Pydantic e normaliza respostas, valores, unidades e datas.
+- `extraction/silver_writer.py`: expande ofertas em linhas de produto, atualiza estatísticas e grava resultados JSON na Silver.
+- `extraction/settings.py`: configura desempenho do modelo, opções de OCR e recortes, matching e ciclo de vida do Ollama.
+
+Fluxo por imagem:
+
+1. O OCR procura produtos configurados; imagens sem correspondência são ignoradas antes da consulta ao modelo.
+2. Com `CROP_PRODUCTS=False` (padrão), o modelo recebe a imagem inteira. Se ativado, o OCR localiza e monta recortes das ofertas.
+3. O Ollama classifica a imagem, extrai ofertas e a resposta é validada pelos schemas Pydantic.
+4. Uma segunda consulta usa a imagem inteira para confirmar produtos da lista de referência.
+5. O `SilverWriter` expande as variantes e grava um JSON válido ou um registro de imagem descartada.
+
+O servidor `ollama serve` é iniciado automaticamente quando `MANAGE_OLLAMA_SERVER=True` e não há um servidor disponível. No encerramento, o serviço descarrega o modelo ou encerra processos Ollama conforme `TERMINATE_EXISTING_SERVER`.
+
+## Execução
+
+Com o ambiente virtual ativo e as imagens já presentes na Bronze:
+
+```powershell
+promotion-tracker
+```
+
+Alternativamente:
+
+```powershell
+python -m promotion_tracker.main
+```
+
+O comando executa a extração nas imagens Bronze e aguarda Enter ao final para fechar o programa. Para chamar o extrator diretamente:
+
+```python
+from promotion_tracker.extraction.llm_extractor import LLMExtractor
+
+with LLMExtractor(
+		model_name="qwen2.5vl:latest",
+		use_ocr_images=False,
+		skip_existing=True,
+		debug=False,
+		max_images=None,
+) as extractor:
+		extractor.process_bronze_folder()
+```
+
+`use_ocr_images=False` seleciona imagens originais; `True` seleciona imagens terminadas em `_ocr`. `max_images` limita a quantidade processada por execução.
+
+## Estrutura do projeto
+
+```text
+config/
+	networks.yaml             Perfis para ingestão
+	segments.yaml             Produtos do segmento
+	settings.yaml             Espaço reservado, ainda sem leitura pelo código
+core/
+	exception.py              Arquivo vazio/reservado
+	models.py                 Arquivo vazio/reservado
+
+	bronze/                   Imagens de entrada
+	silver/                   JSONs da extração
+	gold/                     Reservado; consolidação não implementada
+models/
+	ESPCN_x4.pb               Modelo do ampliador opcional
+src/promotion_tracker/
+	main.py                   Ponto de entrada
+	core/                     Caminhos e persistência compartilhados
+	ingestion/                Cliente Edge, coleta e caminhos de imagem
+	processing/               Melhoria opcional de imagem
+	extraction/               OCR, matching, Ollama e escrita Silver
+	consolidation/            Consolidação da Silver para Gold
+```
+
+O diretório `extraction/backup/` contém uma cópia antiga do extrator e não participa do fluxo ativo.
+
+## Desenvolvimento
+
+As dependências de desenvolvimento são instaladas com:
+
+```powershell
+python -m pip install -e ".[dev]"
+```
+
+Execute a suíte automatizada com `python -m pytest`.
+
+`read.me` documenta o estado atual; dados coletados, resultados, perfil local do Edge, ambientes virtuais e credenciais não devem ser versionados. Essas saídas estão listadas no `.gitignore`.

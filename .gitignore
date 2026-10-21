@@ -1,0 +1,38 @@
+# Python bytecode and package artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+.venv/
+.venv*/
+venv/
+env/
+
+# Local credentials and environment overrides
+.env
+.env.*
+!.env.example
+
+# Test, lint, and editor caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local application data and browser profile
+data/bronze/
+data/silver/
+data/gold/
+edge_ig_profile/
+logs/
+
+# Generated extraction artifacts
+*.log
+*.tmp
+*.debug_*.txt
+*.recorte_*.png
+*_ocr.png
