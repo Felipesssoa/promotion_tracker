@@ -110,9 +110,23 @@ Abreviações reconhecidas já são convertidas no JSON Silver. Cada linha tamb�
 
 `Consolidator` lê os JSONs de `data/silver_reviewed/`, mantém produtos correspondentes à lista em `config/product.yaml` e grava uma consolidação diária em `data/gold/AAAA/MM/DD/ofertas_consolidadas.json`. Também atualiza `data/gold/latest.json`. As gravações JSON usam escrita atômica.
 
+O módulo `consolidation/database.py` disponibiliza `connect_database()` para
+abrir `data/gold/promotions.db` com SQLite. A conexão pode ser fechada pelo
+chamador com `connection.close()`; por exemplo:
+
+```python
+from promotion_tracker.consolidation.database import connect_database
+
+connection = connect_database()
+try:
+    rows = connection.execute("SELECT name FROM sqlite_master").fetchall()
+finally:
+    connection.close()
+```
+
 ### Utilitários compartilhados
 
-`src/promotion_tracker/common/paths.py` centraliza os caminhos do projeto, incluindo Bronze, Silver, Silver reviewed, Gold e configurações. `common/json_io.py` reúne a escrita atômica de JSON, e `common/products.py` carrega o catálogo e converte aliases para o nome canônico.
+`src/promotion_tracker/common/paths.py` centraliza os caminhos do projeto, incluindo Bronze, Silver, Silver reviewed, Gold, o banco de promoções e configurações. `common/json_io.py` reúne a escrita atômica de JSON, e `common/products.py` carrega o catálogo e converte aliases para o nome canônico.
 
 ## Componentes
 

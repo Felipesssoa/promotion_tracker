@@ -12,6 +12,7 @@ def test_project_paths_resolve_pipeline_directories(tmp_path):
     assert paths.silver_dir == tmp_path / "data" / "silver"
     assert paths.silver_reviewed_dir == tmp_path / "data" / "silver_reviewed"
     assert paths.gold_dir == tmp_path / "data" / "gold"
+    assert paths.promotions_db == tmp_path / "data" / "gold" / "promotions.db"
     assert paths.networks_config == tmp_path / "config" / "networks.yaml"
     assert paths.product_config == tmp_path / "config" / "product.yaml"
     assert paths.product_aliases_config == (

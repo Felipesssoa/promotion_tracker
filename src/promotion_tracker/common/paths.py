@@ -37,6 +37,10 @@ class ProjectPaths:
         return self.data_dir / "gold"
 
     @property
+    def promotions_db(self) -> Path:
+        return self.gold_dir / "promotions.db"
+
+    @property
     def models_dir(self) -> Path:
         return self.root / "models"
 
