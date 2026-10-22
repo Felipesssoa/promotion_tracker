@@ -7,7 +7,7 @@ name = "promotion-tracker"
 version = "0.1.0"
 description = "Coleta e extração de ofertas comerciais a partir de Stories."
 readme = { file = "read.me", content-type = "text/markdown" }
-requires-python = ">=3.10"
+requires-python = ">=3.11,<3.13"
 dependencies = [
 	"numpy>=1.24",
 	"ollama>=0.4",
@@ -16,6 +16,9 @@ dependencies = [
 	"pydantic>=2.7",
 	"python-dotenv>=1.0",
 	"PyYAML>=6.0",
+	"paddleocr (>=3.7.0,<4.0.0)",
+	"paddlepaddle (>=3.3.1,<4.0.0)",
+	"onnxruntime (>=1.31.0,<2.0.0)",
 ]
 
 [project.optional-dependencies]

@@ -37,6 +37,10 @@ def _detect_physical_cores() -> int:
 # Parâmetros de inferência local pelo Ollama.
 NUM_CTX = 8192
 NUM_PREDICT = 4096
+DENSE_NUM_CTX = 32768
+DENSE_NUM_PREDICT = 16384
+DENSE_NUM_GPU = -1
+DENSE_OCR_PRICE_THRESHOLD = 12
 MAX_LADO = 1024
 MIN_LADO_ENVIO = 672
 NUM_THREAD = _detect_physical_cores()

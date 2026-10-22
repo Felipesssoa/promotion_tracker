@@ -1,0 +1,11 @@
+{"timestamp":19781166,"category":"session_restore","name":"backup_can_be_loaded_session_file","extra":{"can_load":"true","loadfail_reason":"N/A","glean_timestamp":"1792636681019","path_key":"clean"}}
+{"timestamp":19781167,"category":"session_restore","name":"shutdown_success_session_startup","extra":{"shutdown_reason":"N/A","glean_timestamp":"1792636681020","shutdown_ok":"false"}}
+{"timestamp":19781570,"category":"ui_density","name":"mode","extra":{"device_pixel_ratio":"1","current":"automatic","effective":"standard","glean_timestamp":"1792636681423","window_height":"1062","on_startup":"true","auto_adjustments_prior":"0","touch_capable":"unknown","window_width":"1370"}}
+{"timestamp":19781742,"category":"nimbus_events","name":"startup_database_consistency","extra":{"db_active_count":"36","store_active_count":"36","glean_timestamp":"1792636681595","total_store_count":"42","trigger":"startup","total_db_count":"42","primary":"database"}}
+{"timestamp":19781786,"category":"jsonfile","name":"load_autofillprofiles","extra":{"value":"error_notfounderror","glean_timestamp":"1792636681639"}}
+{"timestamp":19781853,"category":"doh","name":"state_rollback","extra":{"glean_timestamp":"1792636681706","value":"null"}}
+{"timestamp":19782414,"category":"nimbus_events","name":"is_ready","extra":{"glean_timestamp":"1792636682267"}}
+{"timestamp":19782445,"category":"containers","name":"container_profile_loaded","extra":{"containers":"4","glean_timestamp":"1792636682298"}}
+{"timestamp":19782469,"category":"upgrade_dialog","name":"trigger_reason","extra":{"value":"not-major","glean_timestamp":"1792636682322"}}
+{"timestamp":19783082,"category":"glean","name":"session_start","extra":{"sampled_in":"true","session_start_time":"2026-10-21T23:38:02.930-03:00","session_seq":"5","glean_timestamp":"19783082","session_id":"c1c6dbe0-f6b2-41cb-a0c7-4610710facc5"}}
+{"timestamp":19785699,"category":"doh","name":"state_shutdown","extra":{"value":"null","glean_timestamp":"1792636685552"},"session":{"session_id":"c1c6dbe0-f6b2-41cb-a0c7-4610710facc5","session_seq":5,"event_seq":7,"session_sample_rate":1.0,"session_start_time":"2026-10-21T23:38:02.930-03:00"}}

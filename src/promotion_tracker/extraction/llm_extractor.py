@@ -25,24 +25,26 @@ from PIL import Image
 from ..common.logging_config import configure_logging
 from ..common.paths import PROJECT_PATHS
 from ..common.products import ProductCatalog
-from .ocr.matching import FUZZY_AVAILABLE, normalize_search_text
-from .ocr.analyzer import AnaliseOCR, OCRAnalyzer, RegiaoOferta
-from .silver_writer import SilverWriter
-from .llm.service import OllamaService
 from .llm.schemas import RespostaCortada, ResultadoExtracao
+from .llm.service import OllamaService
+from .ocr.analyzer import AnaliseOCR, OCRAnalyzer, RegiaoOferta
+from .ocr.matching import FUZZY_AVAILABLE, normalize_search_text
 from .settings import (
+    CROP_PRODUCTS,
+    DENSE_NUM_CTX,
+    DENSE_NUM_PREDICT,
+    FUZZY_THRESHOLD,
+    MANAGE_OLLAMA_SERVER,
     MATCH_FUZZY,
     MATCH_JOINED_TEXT,
-    TERMINATE_EXISTING_SERVER,
-    MANAGE_OLLAMA_SERVER,
-    FUZZY_THRESHOLD,
     MAX_LADO,
     NUM_BATCH,
     NUM_CTX,
     NUM_PREDICT,
     NUM_THREAD,
-    CROP_PRODUCTS,
+    TERMINATE_EXISTING_SERVER,
 )
+from .silver_writer import SilverWriter
 
 # ----------------------------------------------------------------------
 # Variáveis de ambiente recomendadas (definidas antes do ollama importar)
@@ -504,6 +506,19 @@ class LLMExtractor:
         """
         return OllamaService.stack_crops(crops)
 
+    @staticmethod
+    def _dense_slices(image: Image.Image) -> list[Image.Image]:
+        """Divide um encarte denso em faixas horizontais com sobreposição."""
+        slice_height = (image.height + 1) // 2
+        overlap = max(24, round(image.height * 0.08))
+        middle = image.height - slice_height
+        upper_end = min(image.height, middle + overlap)
+        lower_start = max(0, middle - overlap)
+        return [
+            image.crop((0, 0, image.width, upper_end)),
+            image.crop((0, lower_start, image.width, image.height)),
+        ]
+
     def _build_crops(
         self, image: Image.Image, regions: list[RegiaoOferta]
     ) -> list[Image.Image]:
@@ -578,21 +593,96 @@ class LLMExtractor:
             )
 
         results: list[ResultadoExtracao] = []
+        dense = analysis.dense and len(images) == 1
+        if dense:
+            logger.info(
+                "Encarte denso: usando imagem inteira com contexto ampliado "
+                "(num_ctx=%d, num_predict=%d).",
+                DENSE_NUM_CTX,
+                DENSE_NUM_PREDICT,
+            )
+
         for number, image in enumerate(images, start=1):
             try:
                 results.append(
-                    self._query_model(image, image_path, number, len(images))
-                )
-            except RespostaCortada:
-                logger.warning(
-                    "Resposta cortada (provável loop de repetição). "
-                    "Tentando de novo com amostragem diferente..."
-                )
-                results.append(
                     self._query_model(
-                        image, image_path, number, len(images), attempt=2
+                        image, image_path, number, len(images), dense=dense
                     )
                 )
+            except RespostaCortada:
+                fallback_regions = analysis.fallback_regions or analysis.regions
+                if len(images) == 1 and fallback_regions:
+                    fallback_images = self._build_crops(
+                        original_name, fallback_regions
+                    )
+                    logger.warning(
+                        "Resposta cortada. Dividindo o encarte em %d lote(s) "
+                        "com regiões OCR.",
+                        len(fallback_images),
+                    )
+                    for crop_number, crop in enumerate(
+                        fallback_images, start=1
+                    ):
+                        results.append(
+                            self._query_model(
+                                crop,
+                                image_path,
+                                crop_number,
+                                len(fallback_images),
+                                attempt=2,
+                            )
+                        )
+                    continue
+
+                logger.warning(
+                    "Resposta cortada. Tentando novamente com contexto e "
+                    "saída ampliados."
+                )
+                try:
+                    results.append(
+                        self._query_model(
+                            image,
+                            image_path,
+                            number,
+                            len(images),
+                            attempt=2,
+                            dense=dense,
+                        )
+                    )
+                except RespostaCortada:
+                    if len(images) == 1:
+                        midpoint = original_name.height // 2
+                        fallback_images = [
+                            original_name.crop((0, 0, original_name.width, midpoint)),
+                            original_name.crop(
+                                (
+                                    0,
+                                    midpoint,
+                                    original_name.width,
+                                    original_name.height,
+                                )
+                            ),
+                        ]
+                        logger.warning(
+                            "Resposta cortada novamente. Dividindo o encarte "
+                            "horizontalmente em %d partes.",
+                            len(fallback_images),
+                        )
+                        results.extend(
+                            self._query_model(
+                                crop,
+                                image_path,
+                                crop_number,
+                                len(fallback_images),
+                                attempt=3,
+                                dense=dense,
+                            )
+                            for crop_number, crop in enumerate(
+                                fallback_images, start=1
+                            )
+                        )
+                    else:
+                        raise
 
         # encarte_valido=true sem nenhuma oferta é contradição:
         # trata como não encarte
@@ -642,6 +732,7 @@ class LLMExtractor:
         number: int,
         total_count: int,
         attempt: int = 1,
+        dense: bool = False,
     ) -> ResultadoExtracao:
         """Encaminha uma imagem ao serviço Ollama e retorna sua resposta validada.
 
@@ -656,7 +747,12 @@ class LLMExtractor:
             Resultado da extração validado por Pydantic.
         """
         return self._ollama_service.extract(
-            image, image_path, number, total_count, attempt
+            image,
+            image_path,
+            number,
+            total_count,
+            attempt,
+            dense=dense,
         )
 
     def _revisit_segment_products(

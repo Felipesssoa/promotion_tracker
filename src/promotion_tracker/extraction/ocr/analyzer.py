@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import re
 import statistics
+from dataclasses import dataclass, field
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,6 +22,7 @@ from PIL import Image
 from .matching import normalize_search_text, product_matches
 from ..settings import (
     OCR_MIN_PRICES,
+    DENSE_OCR_PRICE_THRESHOLD,
     OCR_USE_STRIPS,
     OCR_STRIP_HEIGHT,
     OCR_STRIP_SCALE,
@@ -121,6 +123,8 @@ class AnaliseOCR:
     image_size: tuple[int, int]
     use_full_image: bool
     reason: str = ""
+    fallback_regions: list[RegiaoOferta] = field(default_factory=list)
+    dense: bool = False
 
 
 class LocalizadorOfertas:
@@ -776,8 +780,6 @@ class OCRAnalyzer:
         if used_strips:
             return AnaliseOCR(found_products, [], image_size, True,
                               "produto achado na leitura em faixas")
-        if not CROP_PRODUCTS:
-            return AnaliseOCR(found_products, [], image_size, True, "recorte desligado")
         if not positions_available or not lines:
             logger.warning(
                 "OCR sem posições confiáveis. Enviando o encarte inteiro."
@@ -815,5 +817,15 @@ class OCRAnalyzer:
             logger.info(
                 "Região %d: %s | caixa=%s | método=%s",
                 number, ", ".join(region.products), region.box, region.method,
+            )
+        if not CROP_PRODUCTS:
+            return AnaliseOCR(
+                found_products,
+                [],
+                image_size,
+                True,
+                "recorte desligado",
+                fallback_regions=regions,
+                dense=price_count >= DENSE_OCR_PRICE_THRESHOLD,
             )
         return AnaliseOCR(found_products, regions, image_size, False)

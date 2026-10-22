@@ -1,36 +1,39 @@
-
 import logging
+import shutil
 import socket
 import subprocess
 import time
 from pathlib import Path
+from typing import ClassVar
 
 from dotenv import load_dotenv
+from playwright._impl._errors import TargetClosedError
 from playwright.sync_api import (
     Browser,
     BrowserContext,
     Page,
     Playwright,
-    TimeoutError as PlaywrightTimeout,
     sync_playwright,
 )
+from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
 from ..common.paths import PROJECT_PATHS
 from .story_collector import StoryCollector
-
 
 logger = logging.getLogger(__name__)
 
 
 class InstagramClient:
     """
-    Gerencia a inicialização do Microsoft Edge e o acesso ao Instagram
+    Gerencia a inicialização do navegador (Edge, Brave ou Firefox) e o acesso
+    ao Instagram
 
     Utiliza um perfil exclusivo do navegador para manter a sessão autenticada
     e permite realizar o login manualmente quando necessário, o login sempre manual
 
     A conexão com o navegador é feita pelo Playwright através da porta de
-    depuração remota, permitindo controlar as páginas abertas no Edge.
+    depuração remota (Edge e Brave, ambos Chromium), permitindo controlar as
+    páginas abertas no navegador.
 
     Ordem de execução das funções:
         __init__() -> connect() -> _start_edge() -> _connect_edge() -> is_logged_in() |
@@ -40,12 +43,49 @@ class InstagramClient:
         Se não estiver logado, ele encerra a instância de automação e abre uma janela sem depuração para permitir
         a autenticação manual sem ser barrado pelo navegador. Apóss o login, ele reestabelece a conexão com o navegador
         com a porta de depuração remota habilitada e verifica se a autenticação ainda é valida
+
+    Observação sobre os nomes:
+        Os métodos _start_edge, _find_edge e _stop_edge e o atributo
+        edge_process foram mantidos com esses nomes por compatibilidade, mas
+        valem para qualquer navegador Chromium suportado (Edge e Brave).
     """
 
-    EDGE_PATHS = [
-        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
-    ]
+    SUPPORTED_BROWSERS: ClassVar[tuple[str, ...]] = (
+        "edge",
+        "brave",
+        "firefox",
+        "mozilla",
+    )
+    BROWSER_PATHS: ClassVar[dict[str, tuple[str, ...]]] = {
+        "edge": (
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+            "/usr/bin/microsoft-edge",
+            "/usr/bin/microsoft-edge-stable",
+        ),
+        "brave": (
+            r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe",
+            r"C:\Program Files (x86)\BraveSoftware\Brave-Browser\Application\brave.exe",
+            "/usr/bin/brave-browser",
+            "/opt/brave.com/brave/brave",
+        ),
+        "firefox": (
+            r"C:\Program Files\Mozilla Firefox\firefox.exe",
+            r"C:\Program Files (x86)\Mozilla Firefox\firefox.exe",
+            "/usr/bin/firefox",
+            "/usr/bin/firefox-esr",
+        ),
+    }
+    # Nomes dos executáveis para procurar no PATH quando os caminhos fixos falham
+    BROWSER_COMMANDS: ClassVar[dict[str, tuple[str, ...]]] = {
+        "edge": ("microsoft-edge", "microsoft-edge-stable"),
+        "brave": ("brave-browser", "brave"),
+        "firefox": ("firefox", "firefox-esr"),
+    }
+    BROWSER_ALIASES: ClassVar[dict[str, str]] = {
+        "mozilla": "firefox",
+        "brave-browser": "brave",
+    }
 
     DEBUG_PORT = 9222  # Porta utilizada para a comunicação do Playwright com o navegador
     LOGIN_URL = "https://www.instagram.com/accounts/login/"
@@ -55,21 +95,37 @@ class InstagramClient:
     FEED_SELECTOR = 'main[role="main"]'  # Área principal da página do Instagram, vai ser usado pra saber se está na home e logado
     LOGGED_SELECTOR = 'a[href="/direct/inbox/"]'  # Link para as mensagens, usado como indicador de sessão autenticada
 
-    def __init__(self) -> None:
+    def __init__(self, browser: str = "edge") -> None:
         """
         Inicializa os atributos necessários para controlar o navegador
 
         Define o diretório do projeto, o local onde os dados da sessão serão
         armazenados e as referências aos objetos do Playwright
 
-        O perfil separado evita depender do perfil pessoal do Edge e permite
-        reutilizar a autenticação entre execuções
+        O perfil separado evita depender do perfil pessoal do navegador e
+        permite reutilizar a autenticação entre execuções
+
+        Args:
+            browser (str): "edge", "brave" ou "firefox" ("mozilla" também é aceito)
 
         Returns:
             None
         """
+        normalized_browser = browser.strip().lower()
+        normalized_browser = self.BROWSER_ALIASES.get(
+            normalized_browser, normalized_browser
+        )
+        if normalized_browser not in self.BROWSER_PATHS:
+            supported = ", ".join(self.SUPPORTED_BROWSERS)
+            raise ValueError(
+                f"Navegador inválido: {browser!r}. Use: {supported}."
+            )
+
+        self.browser_name = normalized_browser
         self.base_dir = PROJECT_PATHS.root
-        self.profile_dir = PROJECT_PATHS.edge_profile_dir
+        self.profile_dir = (
+            self.base_dir / f"{self.browser_name}_ig_profile"
+        )
 
         # Carrega as variaveis de ambiente do arquivo .env que fica na raiz
         load_dotenv(self.base_dir / ".env")
@@ -89,7 +145,7 @@ class InstagramClient:
 
     def _port_open(self) -> bool:
         """
-        Verifica se a porta de depuração do Edge ta aceitando conexões
+        Verifica se a porta de depuração do navegador ta aceitando conexões
 
         Tenta estabelecer uma conexão TCP local com a porta configurada.
         A verificação permite identificar se o navegador já iniciou a interface
@@ -108,29 +164,36 @@ class InstagramClient:
 
     def _find_edge(self) -> str:
         """
-        Localiza o executável do Microsoft Edge no computador
+        Localiza o executável do navegador escolhido no computador
 
         Percorre os caminhos configurados na classe e retorna o primeiro
-        executável encontrado
+        executável encontrado. Se nenhum existir, procura os nomes
+        conhecidos do executável no PATH
 
         Returns:
-            str: Caminho completo do executável do Edge
+            str: Caminho completo do executável do navegador
 
         Raises:
             FileNotFoundError: Se o navegador não for encontrado nos caminhos
-            configurados
+            configurados nem no PATH
         """
-        for path in self.EDGE_PATHS:
+        browser_name = self.browser_name
+        for path in self.BROWSER_PATHS[browser_name]:
             if Path(path).exists():
                 return path
 
+        for command in self.BROWSER_COMMANDS[browser_name]:
+            executable = shutil.which(command)
+            if executable:
+                return executable
+
         raise FileNotFoundError(
-            "Microsoft Edge não encontrado nos caminhos configurados"
+            f"{browser_name.capitalize()} não encontrado nos caminhos configurados"
         )
 
     def _connect_edge(self) -> None:
         """
-        Estabelece a conexão entre o Playwright e o Edge em execução
+        Estabelece a conexão entre o Playwright e o navegador em execução
 
         Inicia o Playwright e utiliza o protocolo CDP para se conectar ao
         navegador pela porta de depuração remota
@@ -152,7 +215,7 @@ class InstagramClient:
 
             if not self.browser.contexts:
                 raise RuntimeError(
-                    "Não foi encontrado um contexto ativo no Edge"
+                    f"Não foi encontrado um contexto ativo no {self.browser_name.capitalize()}"
                 )
 
             self.context = self.browser.contexts[0]
@@ -172,7 +235,8 @@ class InstagramClient:
 
     def _start_edge(self) -> None:
         """
-        Inicia o Microsoft Edge com a depuração remota habilitada
+        Inicia o navegador Chromium (Edge ou Brave) com o Playwright.
+        Para o Firefox, delega para _start_firefox
 
         Localiza o executável, prepara o diretório do perfil e inicia o
         navegador com os argumentos necessários para permitir a conexão
@@ -182,22 +246,26 @@ class InstagramClient:
         e conecta ao navegador assim que ele estiver pronto
 
         Raises:
-            RuntimeError: Se a porta já estiver em uso ou o Edge for encerrado
-            antes de iniciar a depuração
+            RuntimeError: Se a porta já estiver em uso ou o navegador for
+            encerrado antes de iniciar a depuração
             TimeoutError: Se a porta não ficar disponível dentro do prazo
-            FileNotFoundError: Se o executável do Edge não for encontrado
+            FileNotFoundError: Se o executável do navegador não for encontrado
         """
+        if self.browser_name == "firefox":
+            self._start_firefox()
+            return
+
         if self._port_open():
             raise RuntimeError(
                 f"A porta {self.DEBUG_PORT} já está em uso. "
-                "Feche o navegador de automação antes de continuar"
+                f"Feche o {self.browser_name.capitalize()} de automação antes de continuar"
             )
 
-        edge_path = self._find_edge()
+        browser_path = self._find_edge()
         self.profile_dir.mkdir(parents=True, exist_ok=True)
 
         args = [
-            edge_path,
+            browser_path,
             f"--user-data-dir={self.profile_dir}",
             f"--remote-debugging-port={self.DEBUG_PORT}",
             "--no-first-run",
@@ -205,7 +273,6 @@ class InstagramClient:
             self.HOME_URL,
         ]
 
-        # Popen inicia o navegador sem bloquear a execução do Python
         self.edge_process = subprocess.Popen(args)
 
         for _ in range(30):
@@ -213,23 +280,47 @@ class InstagramClient:
                 self._connect_edge()
                 return
 
-            # Interrompe a espera se o processo do navegador for encerrado
-            if self.edge_process.poll() is not None:
-                raise RuntimeError(
-                    "O Edge foi encerrado antes de iniciar a depuração"
-                )
+            if self.edge_process.poll() is None:
+                time.sleep(1)
+                continue
 
-            time.sleep(1)
+            raise RuntimeError(
+                f"O {self.browser_name.capitalize()} foi encerrado "
+                "antes de iniciar a depuração"
+            )
 
         self._stop_edge()
-
         raise TimeoutError(
-            "O Edge não iniciou a porta de depuração no tempo esperado"
+            f"O {self.browser_name.capitalize()} não iniciou a porta "
+            "de depuração no tempo esperado"
         )
+
+    def _start_firefox(self) -> None:
+        firefox_path = self._find_edge()
+        self.profile_dir.mkdir(parents=True, exist_ok=True)
+        self.playwright = sync_playwright().start()
+
+        try:
+            self.context = self.playwright.firefox.launch_persistent_context(
+                user_data_dir=str(self.profile_dir),
+                executable_path=firefox_path,
+                headless=False,
+                args=["--no-remote"],
+            )
+            self.page = (
+                self.context.pages[0]
+                if self.context.pages
+                else self.context.new_page()
+            )
+            self.page.goto(self.HOME_URL, wait_until="domcontentloaded")
+        except Exception:
+            self.playwright.stop()
+            self.playwright = None
+            raise
 
     def _stop_edge(self) -> None:
         """
-        Encerra a conexão do Playwright e o processo do Edge iniciado pela classe
+        Encerra a conexão do Playwright e o processo do navegador iniciado pela classe
 
         Limpa as referências aos objetos utilizados durante a automação
         e tenta encerrar o processo do navegador de forma controlada
@@ -242,9 +333,11 @@ class InstagramClient:
         """
         if self.playwright:
             try:
+                if self.context:
+                    self.context.close()
                 self.playwright.stop()
             except Exception:
-                pass
+                logger.debug("Falha ao encerrar o navegador.", exc_info=True)
 
         self.playwright = None
         self.browser = None
@@ -264,7 +357,7 @@ class InstagramClient:
 
     def _open_manual_login(self) -> None:
         """
-        Abre o Edge sem depuração para permitir a autenticação manual
+        Abre o navegador sem depuração para permitir a autenticação manual
 
         Utiliza o mesmo diretório de perfil da automação para que os dados
         de sessão possam ser reutilizados na próxima conexão
@@ -275,12 +368,18 @@ class InstagramClient:
         Returns:
             None
         """
-        edge_path = self._find_edge()
+        browser_path = self._find_edge()
         self.profile_dir.mkdir(parents=True, exist_ok=True)
 
+        # Edge e Brave (Chromium) usam --user-data-dir; o Firefox usa --profile
+        profile_args = (
+            [f"--profile={self.profile_dir}"]
+            if self.browser_name == "firefox"
+            else [f"--user-data-dir={self.profile_dir}"]
+        )
         args = [
-            edge_path,
-            f"--user-data-dir={self.profile_dir}",
+            browser_path,
+            *profile_args,
             "--no-first-run",
             "--no-default-browser-check",
             self.LOGIN_URL,
@@ -296,7 +395,12 @@ class InstagramClient:
         # Aguarda o processo iniciado pelo comando terminar
         process.wait()
 
-    def _is_logged_in(self, timeout: int = 10) -> bool:
+    def _is_logged_in(
+        self,
+        timeout: int = 10,
+        *,
+        navigate: bool = True,
+    ) -> bool:
         """
         Verifica se o Instagram está acessível com uma sessão autenticada
 
@@ -316,46 +420,52 @@ class InstagramClient:
             return False
 
         try:
-            self.page.goto(
-                self.HOME_URL,
-                wait_until="domcontentloaded",
-            )
-            self.page.wait_for_timeout(2000)
+            if navigate:
+                self.page.goto(
+                    self.HOME_URL,
+                    wait_until="domcontentloaded",
+                )
+                self.page.wait_for_timeout(2000)
 
-            self.page.locator(self.LOGGED_SELECTOR).first.wait_for(
-                state="visible",
-                timeout=timeout * 1000,
-            )
-            return True
+            if self.page.locator(self.LOGGED_SELECTOR).count() > 0:
+                return True
 
-        except PlaywrightTimeout:
-            pass
+            if self.page.locator(self.PASSWORD_SELECTOR).count() > 0:
+                return False
 
-        try:
-            self.page.locator(self.PASSWORD_SELECTOR).first.wait_for(
-                state="visible",
-                timeout=2000,
-            )
+            return self.page.locator(self.FEED_SELECTOR).count() > 0
+
+        except (PlaywrightTimeout, TargetClosedError):
             return False
 
-        except PlaywrightTimeout:
-            pass
-
-        try:
-            self.page.locator(self.FEED_SELECTOR).first.wait_for(
-                state="visible",
-                timeout=3000,
+    def _wait_for_manual_login(self, timeout: int = 900) -> None:
+        if not self.page:
+            raise RuntimeError(
+                f"{self.browser_name.capitalize()} não está conectado"
             )
-            return True
 
-        except PlaywrightTimeout:
-            return False
+        logger.info(
+            f"Faça login no Instagram na janela aberta do "
+            f"{self.browser_name.capitalize()}. "
+            "A coleta continuará automaticamente após a autenticação."
+        )
+        self.page.goto(self.LOGIN_URL, wait_until="domcontentloaded")
+
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if self._is_logged_in(timeout=2, navigate=False):
+                return
+            self.page.wait_for_timeout(2_000)
+
+        raise TimeoutError(
+            f"Login no Instagram não foi confirmado em {timeout} segundos"
+        )
 
     def connect(self) -> Page:
         """
         Inicia o navegador e garante que o Instagram esteja autenticado
 
-        Primeiro abre o Edge e verifica se a sessão existente ainda é válida
+        Primeiro abre o navegador e verifica se a sessão existente ainda é válida
         Caso não esteja autenticada, encerra a instância de automação, abre
         o navegador para login manual e tenta estabelecer uma nova conexão
 
@@ -365,7 +475,7 @@ class InstagramClient:
         Raises:
             RuntimeError: Se a porta continuar ocupada ou se não for possível
             confirmar a autenticação após o login manual
-            FileNotFoundError: Se o executável do Edge não for encontrado
+            FileNotFoundError: Se o executável do navegador não for encontrado
             TimeoutError: Se o navegador não iniciar dentro do prazo
         """
         self._start_edge()
@@ -376,22 +486,7 @@ class InstagramClient:
 
         logger.info("Sessão não autenticada. Será necessário fazer login.")
 
-        self._stop_edge()
-        self._open_manual_login()
-
-        if self._port_open():
-            raise RuntimeError(
-                f"A porta {self.DEBUG_PORT} continua em uso. "
-                "Feche todas as janelas do Edge e tente novamente"
-            )
-
-        self._start_edge()
-
-        if not self._is_logged_in():
-            self.close()
-            raise RuntimeError(
-                "Não foi possível confirmar o login no Instagram"
-            )
+        self._wait_for_manual_login()
 
         logger.info("Login confirmado.")
         return self.page
@@ -400,8 +495,8 @@ class InstagramClient:
         """
         Encerra os recursos utilizados pela automação
 
-        Delega o encerramento do Playwright e do processo do Edge ao método
-        responsável pela limpeza dos recursos
+        Delega o encerramento do Playwright e do processo do navegador ao
+        método responsável pela limpeza dos recursos
 
         Returns:
             None
