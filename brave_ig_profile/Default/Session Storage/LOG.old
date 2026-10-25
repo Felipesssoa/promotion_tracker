@@ -1,3 +1,6 @@
-2026/10/21-23:47:55.788 5 Reusing MANIFEST /home/felipepessoa/Documents/python/promotion_tracker/brave_ig_profile/Default/Session Storage/MANIFEST-000001
-2026/10/21-23:47:55.788 5 Recovering log #3
-2026/10/21-23:47:55.789 5 Reusing old log /home/felipepessoa/Documents/python/promotion_tracker/brave_ig_profile/Default/Session Storage/000003.log 
+2026/10/24-18:00:05.144 5 Reusing MANIFEST /home/felipepessoa/Documents/python/promotion_tracker/brave_ig_profile/Default/Session Storage/MANIFEST-000001
+2026/10/24-18:00:05.145 5 Recovering log #3
+2026/10/24-18:00:05.152 5 Reusing old log /home/felipepessoa/Documents/python/promotion_tracker/brave_ig_profile/Default/Session Storage/000003.log 
+2026/10/24-18:05:06.470 5 Level-0 table #5: started
+2026/10/24-18:05:06.480 5 Level-0 table #5: 13183 bytes OK
+2026/10/24-18:05:06.487 5 Delete type=0 #3
